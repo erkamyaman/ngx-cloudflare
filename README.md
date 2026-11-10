@@ -1,59 +1,59 @@
-# NgxCloudflareDemo
+<h1 align="center">ngx-cloudflare</h1>
+<p align="center">
+  <img src="https://img.shields.io/maintenance/yes/2026?style=for-the-badge" alt="Maintained: yes" />
+  <img src="https://img.shields.io/badge/angular-21%20%7C%2022-dd0031?style=for-the-badge&logo=angular&logoColor=white" alt="Angular 21 and 22" />
+  <img src="https://img.shields.io/badge/cloudflare-workers-f38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare Workers" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge" alt="License: MIT" /></a>
+  <a href="https://github.com/sponsors/erkamyaman"><img src="https://img.shields.io/badge/sponsor-%E2%9D%A4-db61a2?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor" /></a>
+</p>
+<p align="center">
+Workers bindings, a working hostname allow-list and in-process API calls for Angular SSR apps on Cloudflare Workers, in <code>ng serve</code> and in production.
+</p>
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.2.6.
+> [!NOTE]
+> Work in progress. Nothing is published to npm yet, and the API names below are not final.
 
-## Development server
+## Why
 
-To start a local development server, run:
+Cloudflare's Angular starter gets an app onto Workers, but four things break once it is real:
 
-```bash
-ng serve
-```
+| Problem | What happens |
+| --- | --- |
+| Hostnames | The generated `server.ts` allows only `localhost`, so Angular answers `400 Header "host" ... is not allowed` on the Worker's own `*.workers.dev` address and on custom domains. |
+| Bindings | `env`, `ctx` and `request.cf` never reach Angular code, and `ng serve` has no bindings at all, so anything touching D1 or KV needs `ng build` plus `wrangler dev`. |
+| Own-API calls | During server rendering, `HttpClient.get('/api/...')` leaves the Worker and fetches its own hostname instead of being answered in place. |
+| Log noise | Angular logs a warning for every `forwarded` and `x-forwarded-*` header it drops, on every request. |
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+## What v0.1 will give you
 
-## Code scaffolding
+- **`ng add ngx-cloudflare`**: full setup on a plain `ng new --ssr` app, a patch on Cloudflare-generated projects, and it never overwrites a customised `server.ts`.
+- **Bindings everywhere**: typed access to `env`, the execution context and `cf` from components, services and resolvers, in `ng serve` (through wrangler's platform proxy, sharing local state with `wrangler dev`) and on Workers.
+- **A sensible allow-list**: `localhost`, `127.0.0.1`, `*.workers.dev` and the hostnames in your wrangler routes, with a clear refusal message and `*` only as an explicit opt-in.
+- **Own-API calls in-process**: same-origin `HttpClient` requests are answered inside the Worker during rendering, and Angular's transfer cache keeps working, so the browser does not fetch them again.
+- **Quiet logs**: proxy headers are removed before Angular sees them.
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+Angular CLI apps with SSR on Workers only. Cloudflare Pages, Analog and Angular 20 or older are out of scope.
 
-```bash
-ng generate component component-name
-```
+## Development
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
-
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+This repo is an Angular workspace. The root app is the demo Worker (`ngx-cloudflare-demo`); the library will live in `projects/ngx-cloudflare`.
 
 ```bash
-ng test
+npm ci
+npm start          # ng serve on http://localhost:4200
+npm test           # unit tests (Vitest)
+npm run preview    # build, then serve the output in the local Workers runtime
+npm run deploy     # build, then wrangler deploy
 ```
 
-## Running end-to-end tests
+Run `npm run cf-typegen` after changing bindings in `wrangler.jsonc` to regenerate the `Env` types.
 
-For end-to-end (e2e) testing, run:
+## Roadmap
 
-```bash
-ng e2e
-```
+After v0.1: Durable Objects (and anything importing `cloudflare:workers`, which breaks `ng build` today), Workers alongside an existing Node server, Node built-ins guidance, fake bindings for tests, bindings during prerendering, and typed helpers for queues and cron.
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+## Trademarks and licence
 
-## Additional Resources
+MIT licensed, see [LICENSE](LICENSE).
 
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+Cloudflare and Cloudflare Workers are trademarks of Cloudflare, Inc. Angular is a trademark of Google LLC. This project is not affiliated with, endorsed by, or sponsored by either.
