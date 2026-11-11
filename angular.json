@@ -36,7 +36,10 @@
               "entry": "src/server.ts",
               "platform": "neutral"
             },
-            "outputPath": "dist"
+            "outputPath": "dist",
+            "externalDependencies": [
+              "wrangler"
+            ]
           },
           "configurations": {
             "production": {
@@ -76,6 +79,36 @@
         },
         "test": {
           "builder": "@angular/build:unit-test"
+        }
+      }
+    },
+    "ngx-cloudflare": {
+      "projectType": "library",
+      "root": "projects/ngx-cloudflare",
+      "sourceRoot": "projects/ngx-cloudflare/src",
+      "prefix": "ncf",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:ng-packagr",
+          "configurations": {
+            "production": {
+              "tsConfig": "projects/ngx-cloudflare/tsconfig.lib.prod.json"
+            },
+            "development": {
+              "tsConfig": "projects/ngx-cloudflare/tsconfig.lib.json"
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "tsConfig": "projects/ngx-cloudflare/tsconfig.spec.json",
+            "include": [
+              "**/*.spec.ts",
+              "../testing/**/*.spec.ts"
+            ]
+          }
         }
       }
     }

@@ -7,6 +7,11 @@
     "noPropertyAccessFromIndexSignature": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "ngx-cloudflare": ["./projects/ngx-cloudflare/src/public-api.ts"],
+      "ngx-cloudflare/server": ["./projects/ngx-cloudflare/server/src/public-api.ts"],
+      "ngx-cloudflare/testing": ["./projects/ngx-cloudflare/testing/src/public-api.ts"]
+    },
     "skipLibCheck": true,
     "isolatedModules": true,
     "experimentalDecorators": true,
@@ -26,6 +31,12 @@
     },
     {
       "path": "./tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/ngx-cloudflare/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/ngx-cloudflare/tsconfig.spec.json"
     }
   ]
 }

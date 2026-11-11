@@ -1,0 +1,9 @@
+{
+  "$schema": "../../node_modules/ng-packagr/ng-package.schema.json",
+  "dest": "../../dist-lib/ngx-cloudflare",
+  "lib": {
+    "entryFile": "src/public-api.ts"
+  },
+  "assets": ["schematics/collection.json", "schematics/package.json", "schematics/**/schema.json"],
+  "allowedNonPeerDependencies": ["jsonc-parser"]
+}

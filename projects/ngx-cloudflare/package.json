@@ -1,0 +1,48 @@
+{
+  "name": "ngx-cloudflare",
+  "version": "0.1.0",
+  "peerDependencies": {
+    "@angular/common": "^19.0.0 || ^20.0.0 || ^21.0.0 || ^22.0.0",
+    "@angular/core": "^19.0.0 || ^20.0.0 || ^21.0.0 || ^22.0.0",
+    "@angular/ssr": "^19.0.0 || ^20.0.0 || ^21.0.0 || ^22.0.0",
+    "rxjs": "^7.4.0",
+    "wrangler": "^4.0.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0",
+    "jsonc-parser": "^3.3.1"
+  },
+  "sideEffects": false,
+  "description": "Workers bindings, a working hostname allow-list and in-process API calls for Angular SSR on Cloudflare Workers.",
+  "license": "MIT",
+  "author": "Erkam Yaman",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/erkamyaman/ngx-cloudflare.git",
+    "directory": "projects/ngx-cloudflare"
+  },
+  "homepage": "https://github.com/erkamyaman/ngx-cloudflare#readme",
+  "bugs": {
+    "url": "https://github.com/erkamyaman/ngx-cloudflare/issues"
+  },
+  "keywords": [
+    "angular",
+    "ssr",
+    "cloudflare",
+    "workers",
+    "wrangler",
+    "bindings",
+    "d1",
+    "kv",
+    "schematics"
+  ],
+  "peerDependenciesMeta": {
+    "wrangler": {
+      "optional": true
+    }
+  },
+  "schematics": "./schematics/collection.json",
+  "ng-add": {
+    "save": "dependencies"
+  }
+}

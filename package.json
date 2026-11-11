@@ -9,7 +9,10 @@
     "test": "ng test",
     "preview": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "build:lib": "ng build ngx-cloudflare && tsc -p projects/ngx-cloudflare/tsconfig.schematics.json && node scripts/copy-package-files.mjs",
+    "test:lib": "ng test ngx-cloudflare --watch=false && vitest run --config projects/ngx-cloudflare/vitest.node.config.mts",
+    "db:migrate": "wrangler d1 migrations apply DB --local"
   },
   "private": true,
   "packageManager": "npm@10.9.9",
@@ -31,6 +34,7 @@
     "@angular/compiler-cli": "^22.2.0",
     "@types/node": "^22.20.5",
     "jsdom": "^30.0.0",
+    "ng-packagr": "~22.2.0",
     "prettier": "^3.8.1",
     "typescript": "~6.0.2",
     "vitest": "^5.0.0",
