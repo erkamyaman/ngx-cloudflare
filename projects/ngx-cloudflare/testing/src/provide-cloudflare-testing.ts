@@ -6,11 +6,13 @@ import {
 } from '@angular/core';
 import {
   ApiOption,
+  callInProcess,
   CLOUDFLARE_CONTEXT_MARKER,
   type CloudflareContext,
   type CloudflareContextSource,
   type CloudflareExecutionContext,
   type CloudflareRequestCf,
+  toApiHandler,
 } from 'ngx-cloudflare/server';
 
 export interface CloudflareTestingOptions<Env = Cloudflare.Env, Cf = CloudflareRequestCf> {
@@ -45,14 +47,13 @@ export function createCloudflareTestContext<Env = Cloudflare.Env, Cf = Cloudflar
 ): CloudflareContext<Env, Cf> {
   const env = (options.env ?? {}) as Env;
   const ctx = createTestExecutionContext(options.ctx);
-  const api = options.api;
-  const handler = typeof api === 'function' ? api : api ? api.fetch.bind(api) : undefined;
+  const handler = toApiHandler(options.api);
   return {
     env,
     ctx,
     cf: options.cf,
     source: options.source ?? 'workers',
-    dispatch: async (request) => (handler ? ((await handler(request, env, ctx)) ?? null) : null),
+    dispatch: async (request) => (handler ? callInProcess(handler, request, env, ctx) : null),
     [CLOUDFLARE_CONTEXT_MARKER]: true,
   };
 }

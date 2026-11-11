@@ -2,6 +2,7 @@ import { HttpClient, provideHttpClient, withFetch } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { injectEnv, injectExecutionContext, provideCloudflare } from 'ngx-cloudflare';
+import { isInProcessRequest } from 'ngx-cloudflare/server';
 import {
   createCloudflareTestContext,
   provideCloudflareTesting,
@@ -40,6 +41,18 @@ describe('provideCloudflareTesting', () => {
       ],
     });
     expect(await firstValueFrom(TestBed.inject(HttpClient).get('/api/n'))).toEqual({ n: 2 });
+  });
+
+  it('marks requests sent through dispatch as in-process', async () => {
+    let seen = false;
+    const context = createCloudflareTestContext({
+      api: (request) => {
+        seen = isInProcessRequest(request);
+        return new Response('ok');
+      },
+    });
+    await context.dispatch(new Request('http://localhost/api'));
+    expect(seen).toBe(true);
   });
 
   it('builds a context for code outside Angular', async () => {
