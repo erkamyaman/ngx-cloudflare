@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "NgxCloudflareNgAdd",
+  "title": "ngx-cloudflare ng-add",
+  "type": "object",
+  "properties": {
+    "project": {
+      "type": "string",
+      "description": "The application to set up. Defaults to the first application with server-side rendering.",
+      "$default": { "$source": "projectName" }
+    },
+    "skipInstall": {
+      "type": "boolean",
+      "description": "Do not run the package manager after adding wrangler.",
+      "default": false
+    },
+    "compatibilityDate": {
+      "type": "string",
+      "description": "compatibility_date for a newly created wrangler.jsonc. Defaults to today."
+    }
+  }
+}
