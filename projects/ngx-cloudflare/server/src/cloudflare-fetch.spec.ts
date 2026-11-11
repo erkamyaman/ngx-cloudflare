@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createCloudflareFetch,
+  hostsFromEnv,
   isCloudflareContext,
   isHostAllowed,
   isInProcessRequest,
@@ -34,6 +35,21 @@ describe('resolveAllowedHosts', () => {
       '*.workers.dev',
       'example.com',
     ]);
+  });
+});
+
+describe('hostsFromEnv', () => {
+  it('splits ALLOWED_HOSTS on commas and whitespace', () => {
+    expect(hostsFromEnv({ ALLOWED_HOSTS: ' a.com,b.com  c.com ' })).toEqual([
+      'a.com',
+      'b.com',
+      'c.com',
+    ]);
+  });
+
+  it('ignores a missing or non-string var', () => {
+    expect(hostsFromEnv(undefined)).toEqual([]);
+    expect(hostsFromEnv({ ALLOWED_HOSTS: 1 })).toEqual([]);
   });
 });
 
@@ -130,6 +146,36 @@ describe('createCloudflareFetch', () => {
     expect(await response.text()).toContain('allowedHosts');
     expect(calls).toHaveLength(0);
     expect(error).toHaveBeenCalledTimes(1);
+    error.mockRestore();
+  });
+
+  it('keeps the refused-host log bounded and logs a host again once it was forgotten', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const handler = createCloudflareFetch(async () => new Response('page'));
+    for (let i = 0; i < 150; i++) {
+      await handler(new Request(`https://h${i}.example.com/`), {} as never, ctx);
+    }
+    await handler(new Request('https://h149.example.com/'), {} as never, ctx);
+    expect(error).toHaveBeenCalledTimes(150);
+    await handler(new Request('https://h0.example.com/'), {} as never, ctx);
+    expect(error).toHaveBeenCalledTimes(151);
+    error.mockRestore();
+  });
+
+  it('accepts hosts listed in the ALLOWED_HOSTS var', async () => {
+    const { render } = capture();
+    const handler = createCloudflareFetch(render);
+    const env = { ALLOWED_HOSTS: 'shop.example.com, *.preview.example.com' };
+    expect(
+      (await handler(new Request('https://shop.example.com/'), env as never, ctx)).status,
+    ).toBe(200);
+    expect(
+      (await handler(new Request('https://a.preview.example.com/'), env as never, ctx)).status,
+    ).toBe(200);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(
+      (await handler(new Request('https://other.example.com/'), env as never, ctx)).status,
+    ).toBe(400);
     error.mockRestore();
   });
 

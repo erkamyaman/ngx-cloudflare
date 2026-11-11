@@ -12,6 +12,8 @@ export const DEFAULT_ALLOWED_HOSTS: readonly string[] = ['localhost', '127.0.0.1
 
 export const DEFAULT_API_PREFIX = '/api/';
 
+const MAX_LOGGED_REFUSALS = 100;
+
 export interface CloudflareExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
   passThroughOnException(): void;
@@ -80,6 +82,19 @@ export function isCloudflareContext(value: unknown): value is CloudflareContext<
   );
 }
 
+export const ALLOWED_HOSTS_VAR = 'ALLOWED_HOSTS';
+
+export function hostsFromEnv(env: unknown): string[] {
+  const value = (env as Record<string, unknown> | undefined)?.[ALLOWED_HOSTS_VAR];
+  if (typeof value !== 'string') {
+    return [];
+  }
+  return value
+    .split(/[\s,]+/)
+    .map((host) => host.trim())
+    .filter(Boolean);
+}
+
 export function resolveAllowedHosts(extra: readonly string[] = []): string[] {
   const hosts: string[] = [];
   for (const host of [...DEFAULT_ALLOWED_HOSTS, ...extra]) {
@@ -112,7 +127,7 @@ export function isHostAllowed(hostname: string, allowedHosts: readonly string[])
 export function hostRefusal(hostname: string): Response {
   return new Response(
     `Host "${hostname}" is not allowed by ngx-cloudflare. ` +
-      `Add it to allowedHosts in createCloudflareRequestHandler() in src/server.ts. ` +
+      `Add it to ALLOWED_HOSTS in the vars of wrangler.jsonc, or to allowedHosts in src/server.ts. ` +
       `localhost, 127.0.0.1 and *.workers.dev are allowed by default.`,
     { status: 400, headers: { 'content-type': 'text/plain; charset=utf-8' } },
   );
@@ -140,7 +155,7 @@ export function stripProxyHeaders(request: Request): Request {
   return new Request(request, { headers });
 }
 
-function toApiHandler<Env>(api: ApiOption<Env> | undefined): ApiHandler<Env> | undefined {
+export function toApiHandler<Env>(api: ApiOption<Env> | undefined): ApiHandler<Env> | undefined {
   if (!api) {
     return undefined;
   }
@@ -159,6 +174,16 @@ function matchesPrefix(request: Request, prefix: string | false): boolean {
   return pathname === bare || pathname.startsWith(bare + '/');
 }
 
+export async function callInProcess<Env>(
+  handler: ApiHandler<Env>,
+  request: Request,
+  env: Env,
+  ctx: CloudflareExecutionContext,
+): Promise<Response | null> {
+  inProcessRequests.add(request);
+  return (await handler(request, env, ctx)) ?? null;
+}
+
 const NOOP_CONTEXT: CloudflareExecutionContext = {
   waitUntil() {},
   passThroughOnException() {},
@@ -169,11 +194,23 @@ export function createCloudflareFetch<Env = Cloudflare.Env>(
   options: CloudflareHandlerOptions<Env> = {},
   loadDevPlatform?: DevPlatformLoader,
 ): CloudflareFetchHandler<Env> {
-  const allowedHosts = resolveAllowedHosts(options.allowedHosts);
+  const configuredHosts = options.allowedHosts ?? [];
+  const hostsByEnv = new WeakMap<object, string[]>();
+  const allowedHostsFor = (env: unknown): string[] => {
+    if (typeof env !== 'object' || env === null) {
+      return resolveAllowedHosts(configuredHosts);
+    }
+    let hosts = hostsByEnv.get(env);
+    if (!hosts) {
+      hosts = resolveAllowedHosts([...configuredHosts, ...hostsFromEnv(env)]);
+      hostsByEnv.set(env, hosts);
+    }
+    return hosts;
+  };
   const api = toApiHandler(options.api);
   const apiPrefix = options.apiPrefix ?? DEFAULT_API_PREFIX;
   const strip = options.stripProxyHeaders ?? true;
-  const refusedHosts = new Set<string>();
+  const loggedRefusals = new Set<string>();
 
   async function callApi(
     request: Request,
@@ -236,9 +273,13 @@ export function createCloudflareFetch<Env = Cloudflare.Env>(
     }
 
     const { hostname } = new URL(request.url);
+    const allowedHosts = allowedHostsFor(platform?.env);
     if (!isHostAllowed(hostname, allowedHosts)) {
-      if (!refusedHosts.has(hostname)) {
-        refusedHosts.add(hostname);
+      if (!loggedRefusals.has(hostname)) {
+        if (loggedRefusals.size >= MAX_LOGGED_REFUSALS) {
+          loggedRefusals.clear();
+        }
+        loggedRefusals.add(hostname);
         console.error(
           `ngx-cloudflare: refused host "${hostname}". Allowed hosts: ${allowedHosts.join(', ')}`,
         );

@@ -4,6 +4,7 @@ import {
   CloudflareHandlerOptions,
   CloudflarePlatform,
   createCloudflareFetch,
+  hostsFromEnv,
   resolveAllowedHosts,
 } from './cloudflare-fetch';
 
@@ -33,9 +34,10 @@ function loadPlatformProxy(
     .then((wrangler) => wrangler.getPlatformProxy(options))
     .then((proxy) => ({ env: proxy.env, ctx: proxy.ctx, cf: proxy.cf }))
     .catch((error: unknown) => {
+      cache.__ngxCloudflarePlatformProxy = undefined;
       console.error(
         "ngx-cloudflare: could not start wrangler's platform proxy, so bindings are unavailable in ng serve. " +
-          'Install wrangler as a dev dependency and check wrangler.jsonc.',
+          'Install wrangler as a dev dependency and check wrangler.jsonc. The next request tries again.',
         error,
       );
       return undefined;
@@ -47,12 +49,16 @@ export function createCloudflareRequestHandler<Env = Cloudflare.Env>(
   options: CloudflareRequestHandlerOptions<Env> = {},
 ): CloudflareFetchHandler<Env> {
   let engine: AngularAppEngine | undefined;
-  const allowedHosts = resolveAllowedHosts(options.allowedHosts);
   const devPlatform = options.devPlatform;
 
   const handler = createCloudflareFetch<Env>(
     (request, context) => {
-      engine ??= new AngularAppEngine({ allowedHosts });
+      engine ??= new AngularAppEngine({
+        allowedHosts: resolveAllowedHosts([
+          ...(options.allowedHosts ?? []),
+          ...hostsFromEnv(context?.env),
+        ]),
+      });
       return engine.handle(request, context);
     },
     options,
