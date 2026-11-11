@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  NG_CLI_ANALYTICS: 'false'
+  WRANGLER_SEND_METRICS: 'false'
+
+jobs:
+  test:
+    name: Unit tests and builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build:lib
+      - run: npm run test:lib
+      - run: npx ng test ngx-cloudflare-demo --watch=false
+      - run: npx ng build ngx-cloudflare-demo
+      - name: Production bundle must not reference wrangler
+        run: '! grep -l wrangler dist/server/*.mjs'
+      - run: npm pack ./dist-lib/ngx-cloudflare --pack-destination dist-lib
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package
+          path: dist-lib/ngx-cloudflare-*.tgz
+
+  e2e:
+    name: ng add on Angular ${{ matrix.angular }}
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        angular: ['19', '20', '21', '22']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          name: package
+          path: package
+      - run: scripts/e2e-ng-add.sh ${{ matrix.angular }} package/ngx-cloudflare-*.tgz
