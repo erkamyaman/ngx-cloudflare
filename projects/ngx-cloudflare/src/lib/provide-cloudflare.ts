@@ -1,6 +1,6 @@
 import { FetchBackend, HttpBackend } from '@angular/common/http';
 import { EnvironmentProviders, makeEnvironmentProviders } from '@angular/core';
-import { CloudflareFetchBackend } from './http-backend';
+import { CloudflareFetchBackend } from './cloudflare-fetch-backend';
 
 export interface ProvideCloudflareOptions {
   inProcessRequests?: boolean;

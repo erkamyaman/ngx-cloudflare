@@ -66,6 +66,12 @@ export type CloudflareFetchHandler<Env = Cloudflare.Env> = (
   ctx?: CloudflareExecutionContext,
 ) => Promise<Response>;
 
+const inProcessRequests = new WeakSet<Request>();
+
+export function isInProcessRequest(request: Request): boolean {
+  return inProcessRequests.has(request);
+}
+
 export function isCloudflareContext(value: unknown): value is CloudflareContext<any, any> {
   return (
     typeof value === 'object' &&
@@ -207,8 +213,10 @@ export function createCloudflareFetch<Env = Cloudflare.Env>(
       ctx: platform.ctx,
       cf: platform.cf,
       source,
-      dispatch: async (request) =>
-        (await callApi(request, platform)) ?? (await serveAsset(request, platform)),
+      dispatch: async (request) => {
+        inProcessRequests.add(request);
+        return (await callApi(request, platform)) ?? (await serveAsset(request, platform));
+      },
       [CLOUDFLARE_CONTEXT_MARKER]: true,
     };
   }

@@ -5,7 +5,7 @@ import {
   CloudflarePlatform,
   createCloudflareFetch,
   resolveAllowedHosts,
-} from './core';
+} from './cloudflare-fetch';
 
 declare const ngDevMode: boolean | undefined;
 

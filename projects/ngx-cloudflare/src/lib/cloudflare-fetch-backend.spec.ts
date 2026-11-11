@@ -10,8 +10,8 @@ import { REQUEST, REQUEST_CONTEXT } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { CLOUDFLARE_CONTEXT_MARKER } from 'ngx-cloudflare/server';
-import { CloudflareFetchBackend } from './http-backend';
-import { provideCloudflare } from './provide';
+import { CloudflareFetchBackend } from './cloudflare-fetch-backend';
+import { provideCloudflare } from './provide-cloudflare';
 
 type Dispatch = (request: Request) => Promise<Response | null>;
 

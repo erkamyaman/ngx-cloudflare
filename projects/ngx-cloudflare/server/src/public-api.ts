@@ -1,2 +1,2 @@
-export * from './core';
-export * from './angular';
+export * from './cloudflare-fetch';
+export * from './cloudflare-request-handler';

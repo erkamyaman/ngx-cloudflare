@@ -1,5 +1,4 @@
 import { HttpClient, provideHttpClient, withFetch } from '@angular/common/http';
-import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { injectEnv, injectExecutionContext, provideCloudflare } from 'ngx-cloudflare';
@@ -7,21 +6,15 @@ import {
   createCloudflareTestContext,
   provideCloudflareTesting,
   type TestExecutionContext,
-} from './provide-testing';
-
-@Component({ selector: 'test-greeting', template: '{{ greeting }}' })
-class Greeting {
-  protected readonly greeting = injectEnv<{ GREETING: string }>()?.GREETING ?? 'none';
-}
+} from './provide-cloudflare-testing';
 
 describe('provideCloudflareTesting', () => {
-  it('gives components fake bindings', () => {
+  it('gives injectEnv() fake bindings', () => {
     TestBed.configureTestingModule({
       providers: [provideCloudflareTesting({ env: { GREETING: 'hi' } })],
     });
-    const fixture = TestBed.createComponent(Greeting);
-    fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toBe('hi');
+    const env = TestBed.runInInjectionContext(() => injectEnv<{ GREETING: string }>());
+    expect(env?.GREETING).toBe('hi');
   });
 
   it('records waitUntil promises', () => {

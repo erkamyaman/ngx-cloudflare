@@ -1,7 +1,12 @@
 import { Injector, REQUEST_CONTEXT, runInInjectionContext } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { CLOUDFLARE_CONTEXT_MARKER } from 'ngx-cloudflare/server';
-import { injectCloudflare, injectEnv, injectExecutionContext, injectRequestCf } from './inject';
+import {
+  injectCloudflare,
+  injectEnv,
+  injectExecutionContext,
+  injectRequestCf,
+} from './inject-cloudflare';
 
 const ctx = { waitUntil() {}, passThroughOnException() {} };
 const context = {

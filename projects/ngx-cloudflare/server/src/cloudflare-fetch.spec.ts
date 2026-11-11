@@ -3,11 +3,12 @@ import {
   createCloudflareFetch,
   isCloudflareContext,
   isHostAllowed,
+  isInProcessRequest,
   resolveAllowedHosts,
   stripProxyHeaders,
   type CloudflareContext,
   type RenderFunction,
-} from './core';
+} from './cloudflare-fetch';
 
 const ctx = { waitUntil: vi.fn(), passThroughOnException: vi.fn() };
 
@@ -255,6 +256,21 @@ describe('createCloudflareFetch', () => {
           new Request('https://d.workers.dev/data.json', { method: 'POST', body: '{}' }),
         ),
       ).toBeNull();
+    });
+
+    it('marks dispatched requests so handlers can tell them from network calls', async () => {
+      const { render, calls } = capture();
+      const seen: boolean[] = [];
+      const handler = createCloudflareFetch(render, {
+        api: (request) => {
+          seen.push(isInProcessRequest(request));
+          return Response.json({});
+        },
+      });
+      await handler(new Request('https://d.workers.dev/api/x'), {} as never, ctx);
+      await handler(new Request('https://d.workers.dev/'), {} as never, ctx);
+      await calls[0].context!.dispatch(new Request('https://d.workers.dev/api/x'));
+      expect(seen).toEqual([false, true]);
     });
 
     it('returns null when nothing handles the request', async () => {
