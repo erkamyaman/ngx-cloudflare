@@ -2,7 +2,7 @@
 
 ## `Host "..." is not allowed by ngx-cloudflare`
 
-The request's hostname is not on the allow-list. Add it to `allowedHosts` in `src/server.ts`. Defaults are `localhost`, `127.0.0.1` and `*.workers.dev`.
+The request's hostname is not on the allow-list. Add it to `ALLOWED_HOSTS` in the `vars` of `wrangler.jsonc` and redeploy, or to `allowedHosts` in `src/server.ts`. Defaults are `localhost`, `127.0.0.1` and `*.workers.dev`.
 
 If you see Angular's own message instead (`Header "host" with value ... is not allowed`), the server entry is not using `createCloudflareRequestHandler()`. Run `ng add ngx-cloudflare` again or update `src/server.ts` by hand.
 

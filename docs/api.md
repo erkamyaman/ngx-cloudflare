@@ -23,11 +23,13 @@ Other handlers (`scheduled`, `queue`, `email`) stay yours: export them next to `
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| `allowedHosts` | `[]` | Hostnames to accept on top of `localhost`, `127.0.0.1` and `*.workers.dev`. `*.example.com` matches subdomains, not `example.com` itself. `'*'` accepts every host and must be added on purpose. |
+| `allowedHosts` | `[]` | Hostnames to accept on top of `localhost`, `127.0.0.1` and `*.workers.dev`, and on top of the `ALLOWED_HOSTS` var. `*.example.com` matches subdomains, not `example.com` itself. `'*'` accepts every host and must be added on purpose. |
 | `api` | none | A function `(request, env, ctx) => Response \| null`, or an object with a `fetch` method such as a Hono app. Return `null` or `undefined` to let Angular render the path. |
 | `apiPrefix` | `'/api/'` | Which paths go to `api`. `false` sends every path to `api` first. |
 | `stripProxyHeaders` | `true` | Remove `forwarded` and `x-forwarded-*` before Angular sees the request. The `api` handler still gets them. |
 | `devPlatform` | `{}` | Options for `getPlatformProxy()` under `ng serve`: `configPath`, `environment`, `persist`. `false` turns dev bindings off. |
+
+The handler also reads the `ALLOWED_HOSTS` var from `env`: a comma- or space-separated list in the `vars` of `wrangler.jsonc`. `ng add` fills it from your routes.
 
 Requests are handled in this order:
 
@@ -49,6 +51,9 @@ The Angular-free core that `createCloudflareRequestHandler` wraps. Use it to plu
 | `isHostAllowed(hostname, hosts)` | The matching rule used by the handler. |
 | `stripProxyHeaders(request)` | Returns the request without proxy headers, or the same request if it had none. |
 | `isCloudflareContext(value)` | Whether a `REQUEST_CONTEXT` value came from ngx-cloudflare. |
+| `hostsFromEnv(env)` | The hostnames listed in `env.ALLOWED_HOSTS`. |
+| `toApiHandler(api)` | Turns an `api` option (a function or an object with `fetch`) into one function. |
+| `callInProcess(handler, request, env, ctx)` | Calls an `api` handler the way `dispatch` does, marking the request as in-process. |
 | `isInProcessRequest(request)` | Whether `api` received the request through `dispatch` during rendering rather than over the network. The flag lives in memory, so a client cannot fake it with a header. |
 
 ### `CloudflareContext<Env, Cf>`

@@ -2,15 +2,27 @@
 
 ## Custom domains
 
-Add every hostname the Worker answers on:
+List every hostname the Worker answers on in the `ALLOWED_HOSTS` var, next to the routes that point them at the Worker:
+
+```jsonc
+{
+  "routes": [
+    { "pattern": "example.com", "custom_domain": true },
+    { "pattern": "www.example.com", "custom_domain": true }
+  ],
+  "vars": { "ALLOWED_HOSTS": "example.com,www.example.com,*.preview.example.com" }
+}
+```
+
+`ng add` copies hostnames from `route` and `routes`, including those under `env`, into `ALLOWED_HOSTS`. Run it again after adding routes, or edit the var by hand. Changing the var needs a redeploy but no code change.
+
+You can also pass hosts in code, which is useful when the list depends on something only `server.ts` knows:
 
 ```ts
 export const reqHandler = createCloudflareRequestHandler<Env>({
-  allowedHosts: ['example.com', 'www.example.com', '*.preview.example.com'],
+  allowedHosts: ['example.com'],
 });
 ```
-
-`ng add` copies hostnames from `route` and `routes` in `wrangler.jsonc`, including those under `env`. Run it again after adding routes, or edit the list by hand.
 
 ## A Hono API
 

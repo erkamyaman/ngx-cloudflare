@@ -43,7 +43,8 @@ ng add ngx-cloudflare
 Run it on an app with server-side rendering (`ng new --ssr`, or after `ng add @angular/ssr`). It also works on projects made by `npm create cloudflare` and `wrangler setup`. It:
 
 - points the build at Workers (`outputMode: server`, the neutral SSR platform, `wrangler` kept out of the bundle),
-- replaces a stock `src/server.ts` (Angular's Express server or Cloudflare's template) and never touches one you customised,
+- replaces a stock `src/server.ts` (Angular's Express server or Cloudflare's untouched template, keeping any hosts you added to it) and never touches one you customised,
+- copies the hostnames in your wrangler routes into `ALLOWED_HOSTS` in `wrangler.jsonc`, again each time you run it,
 - registers `provideCloudflare()` in the server config,
 - creates `wrangler.jsonc`, or repairs one that deploys the app as a static site,
 - switches the stock prerender-everything route to per-request rendering,
@@ -77,6 +78,13 @@ export const reqHandler = createCloudflareRequestHandler<Env>({
 });
 
 export default { fetch: reqHandler } satisfies ExportedHandler<Env>;
+```
+
+Custom domains can also live next to your routes in `wrangler.jsonc`, so adding one needs no code change:
+
+```jsonc
+"routes": [{ "pattern": "shop.example.com", "custom_domain": true }],
+"vars": { "ALLOWED_HOSTS": "shop.example.com" }
 ```
 
 `api` takes a function or anything with a `fetch` method, such as a [Hono](https://hono.dev) app. It receives requests under `/api/`. Return `null` to let Angular handle the path.
@@ -126,12 +134,25 @@ npm start            # or: npm run preview
 ## Tests
 
 ```bash
-npm run test:lib                          # library: server core, inject functions, HTTP backend, ng add
-npx ng test ngx-cloudflare-demo           # demo
-scripts/e2e-ng-add.sh 22 <package.tgz>    # fresh app, ng add, wrangler dev and ng serve checks
+npm run test:lib                                     # library: server core, inject functions, HTTP backend, ng add
+scripts/test-lib-angular.sh 19                       # the library's Angular tests against Angular 19 (or 20, 21, 22)
+npx ng test ngx-cloudflare-demo                      # demo
+scripts/e2e-ng-add.sh 22 <package.tgz> [kind]        # create an app, ng add, then check wrangler dev and ng serve
 ```
 
-CI runs all of them, and the end-to-end script on Angular 19, 20, 21 and 22.
+`kind` is `ng-new` (default), `cloudflare` for a project made by `npm create cloudflare`, or `wrangler-setup` for one configured by `wrangler setup`.
+
+CI runs the library tests on Angular 19, 20, 21 and 22, the end-to-end script on a fresh app for each of those versions, and on the Cloudflare starter and a `wrangler setup` project.
+
+## Beyond the basics
+
+These ship with the package too, for cases the core flow does not cover:
+
+- `ngx-cloudflare/testing`: fake bindings for TestBed.
+- `isInProcessRequest(request)`: lets an `api` handler tell a render-time call from a browser call.
+- `dispatch` falls back to the `ASSETS` binding, so a page can read its own static JSON files in-process.
+- Options to turn parts off: `apiPrefix: false`, `stripProxyHeaders: false`, `devPlatform: false`, `provideCloudflare({ inProcessRequests: false })`.
+- A [Durable Objects recipe](docs/recipes.md#durable-objects).
 
 ## Limits
 
