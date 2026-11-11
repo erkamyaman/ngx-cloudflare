@@ -1,72 +1,230 @@
-<main>
-  <header>
-    <h1>Guestbook</h1>
-    <p class="lede">
-      An Angular app rendered on Cloudflare Workers with
-      <a href="https://github.com/erkamyaman/ngx-cloudflare">ngx-cloudflare</a>. Entries live in D1,
-      the visit counter in KV.
+<main class="page">
+  <header class="intro">
+    <div class="title-row">
+      <h1>Guestbook</h1>
+      <button
+        tuiIconButton
+        type="button"
+        appearance="flat-grayscale"
+        size="m"
+        [iconStart]="themeIcon()"
+        (click)="theme.toggle()"
+      >
+        {{ themeLabel() }}
+      </button>
+    </div>
+    <p>
+      Angular {{ angularVersion }} with server-side rendering on Cloudflare Workers. Entries live in
+      D1, the visit counter in KV, and every response carries a trace from
+      <a tuiLink href="https://github.com/erkamyaman/ngx-cloudflare">ngx-cloudflare</a>. Open
+      DevTools after it loads: the browser never requests <code>/api/entries</code>.
     </p>
-    @if (visit(); as v) {
-      <p class="meta" id="visit">
-        Visit #{{ v.count }}
-        @if (v.country) {
-          from {{ v.country }}
-        }
-        · bindings via {{ v.source }}
-      </p>
-    }
+    <div class="install">
+      <code>ng add ngx-cloudflare</code>
+      <button tuiButtonCopy="ng add ngx-cloudflare">Copy</button>
+    </div>
   </header>
 
-  <form (submit)="submit($event)" novalidate>
-    <label>
-      Name
-      <input [formField]="entryForm.name" autocomplete="name" />
-    </label>
-    @if (entryForm.name().touched() && entryForm.name().invalid()) {
-      <p class="field-error">
-        {{ entryForm.name().errors()[0].message ?? 'Keep it under 60 characters.' }}
+  <aside class="trace" aria-labelledby="trace-title">
+    <div class="trace-head">
+      <h2 id="trace-title">Request trace</h2>
+      @if (trace(); as t) {
+        <span class="trace-req">{{ t.method }} {{ t.path }}</span>
+      }
+    </div>
+    @if (trace(); as t) {
+      <dl class="rows">
+        <div class="row ok">
+          <dt>host</dt>
+          <dd>
+            {{ t.host }}<br /><span class="dim">allowedHosts matched {{ t.matched }}</span>
+          </dd>
+        </div>
+        <div class="row ok">
+          <dt>runtime</dt>
+          <dd>
+            @if (t.source === 'workers') {
+              workerd<br /><span class="dim">env, ctx and cf from fetch()</span>
+            } @else {
+              ng serve<br /><span class="dim">bindings from wrangler getPlatformProxy()</span>
+            }
+          </dd>
+        </div>
+        <div class="row ok">
+          <dt>env</dt>
+          <dd>{{ t.bindings.join(' ') }}</dd>
+        </div>
+        <div class="row" [class.ok]="t.colo">
+          <dt>cf</dt>
+          <dd>
+            colo={{ t.colo ?? 'n/a' }} country={{ t.country ?? 'n/a' }}
+            @if (t.protocol) {
+              <br /><span class="dim">{{ t.protocol }} {{ t.tls ?? '' }}</span>
+            }
+          </dd>
+        </div>
+        <div class="row ok">
+          <dt>kv</dt>
+          <dd>
+            VISITS.get('count') = {{ t.visitsBefore }}<br /><span class="dim"
+              >put({{ t.visit }}) in ctx.waitUntil()</span
+            >
+          </dd>
+        </div>
+        <div class="row" [class.ok]="fetchedInProcess()" [class.warn]="!fetchedInProcess()">
+          <dt>fetch</dt>
+          <dd>
+            GET /api/entries
+            <br /><span class="dim">
+              @switch (servedVia()) {
+                @case ('in-process') {
+                  in-process via dispatch(), no subrequest
+                }
+                @case ('network') {
+                  left the Worker over the network
+                }
+                @default {
+                  failed
+                }
+              }
+            </span>
+          </dd>
+        </div>
+        @if (d1Ms() !== null) {
+          <div class="row ok">
+            <dt>d1</dt>
+            <dd>
+              SELECT ... LIMIT 50<br /><span class="dim">{{ d1Ms() }} ms (Server-Timing)</span>
+            </dd>
+          </div>
+        }
+        <div class="row" [class.ok]="cacheHit()" [class.warn]="refetched()">
+          <dt>hydrate</dt>
+          <dd aria-live="polite">
+            @switch (browserRequests()) {
+              @case (null) {
+                waiting for the browser
+              }
+              @case (0) {
+                transfer cache hit<br /><span class="dim">0 browser fetches to /api/entries</span>
+              }
+              @default {
+                {{ browserRequests() }} browser fetches to /api/entries
+              }
+            }
+          </dd>
+        </div>
+      </dl>
+      <p class="trace-foot">
+        @if (t.ray) {
+          cf-ray {{ t.ray }}<br />
+        }
+        {{ t.renderedAt | date: 'yyyy-MM-dd HH:mm:ss' : 'UTC' }} UTC, visit {{ t.visit }}
+      </p>
+    } @else {
+      <p class="trace-empty">
+        This view was rendered in the browser, so there is no server trace. Reload the page to get
+        one.
       </p>
     }
-    <label>
-      Message
-      <textarea [formField]="entryForm.message" rows="3"></textarea>
-    </label>
-    @if (entryForm.message().touched() && entryForm.message().invalid()) {
-      <p class="field-error">
-        {{ entryForm.message().errors()[0].message ?? 'Keep it under 500 characters.' }}
-      </p>
-    }
-    <button type="submit" [disabled]="sending()">
-      {{ sending() ? 'Signing…' : 'Sign the guestbook' }}
-    </button>
-    @if (error(); as message) {
-      <p class="field-error" role="alert">{{ message }}</p>
-    }
-  </form>
+  </aside>
 
-  <section aria-label="Entries">
+  <section class="sign" aria-labelledby="sign-title">
+    <h2 id="sign-title">Sign the guestbook</h2>
+    <form (submit)="signGuestbook($event)" novalidate>
+      <tui-textfield>
+        <label tuiLabel for="name">Name</label>
+        <input
+          id="name"
+          tuiInput
+          [formField]="entryForm.name"
+          autocomplete="name"
+          aria-required="true"
+          [attr.aria-invalid]="nameInvalid()"
+          [attr.aria-describedby]="nameInvalid() ? 'name-error' : null"
+        />
+      </tui-textfield>
+      <tui-error id="name-error" [formField]="entryForm.name" />
+      <tui-textfield>
+        <label tuiLabel for="message">Message</label>
+        <textarea
+          id="message"
+          tuiTextarea
+          [limit]="500"
+          [minRows]="3"
+          [maxRows]="8"
+          [formField]="entryForm.message"
+          aria-required="true"
+          [attr.aria-invalid]="messageInvalid()"
+          [attr.aria-describedby]="messageInvalid() ? 'message-error' : null"
+        ></textarea>
+      </tui-textfield>
+      <tui-error id="message-error" [formField]="entryForm.message" />
+      <button tuiButton type="submit" class="submit" [loading]="entryForm().submitting()">
+        Sign the guestbook
+      </button>
+      @if (error(); as message) {
+        <div tuiNotification appearance="negative" role="alert">{{ message }}</div>
+      }
+      <div aria-live="polite">
+        @if (signedAs(); as name) {
+          <div tuiNotification appearance="positive">
+            Signed, {{ name }}. Your entry is at the top of the list.
+          </div>
+        }
+      </div>
+    </form>
+  </section>
+
+  <section class="register" aria-labelledby="register-title">
+    <h2 id="register-title">Signed by</h2>
     @if (entries.error()) {
-      <p class="field-error">Could not load entries.</p>
+      <div tuiNotification appearance="negative">
+        The entries could not be loaded. Reload the page to try again.
+      </div>
     }
     <ol id="entries">
       @for (entry of added(); track entry.id) {
-        <li>
+        <li class="fresh">
           <strong>{{ entry.name }}</strong>
           <p>{{ entry.message }}</p>
-          <time [attr.datetime]="entry.created_at">{{ entry.created_at.slice(0, 10) }}</time>
+          <time [attr.datetime]="entry.created_at">{{ entry.created_at | date: 'd MMM y' }}</time>
         </li>
       }
       @for (entry of entries.value(); track entry.id) {
         <li>
           <strong>{{ entry.name }}</strong>
           <p>{{ entry.message }}</p>
-          <time [attr.datetime]="entry.created_at">{{ entry.created_at.slice(0, 10) }}</time>
+          <time [attr.datetime]="entry.created_at">{{ entry.created_at | date: 'd MMM y' }}</time>
         </li>
       } @empty {
-        @if (added().length === 0 && !entries.isLoading()) {
-          <li class="empty">No entries yet. Be the first.</li>
+        @if (entries.isLoading()) {
+          <li class="empty">Loading entries</li>
+        } @else if (added().length === 0 && !entries.error()) {
+          <li class="empty">Nobody has signed yet. Be the first.</li>
         }
       }
     </ol>
+  </section>
+  <section class="source" aria-labelledby="source-title">
+    <h2 id="source-title">How this page is built</h2>
+    @for (sample of samples; track sample.file) {
+      <figure>
+        <figcaption>
+          <code>{{ sample.file }}</code>
+          <span>{{ sample.note }}</span>
+        </figcaption>
+        <div class="code">
+          <button
+            class="copy"
+            [tuiButtonCopy]="sample.code"
+            [attr.aria-label]="'Copy ' + sample.file"
+          >
+            Copy
+          </button>
+          <div [innerHTML]="sample.html"></div>
+        </div>
+      </figure>
+    }
   </section>
 </main>

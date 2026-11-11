@@ -1,9 +1,6 @@
-export interface Entry {
-  id: number;
-  name: string;
-  message: string;
-  created_at: string;
-}
+import { isInProcessRequest } from 'ngx-cloudflare/server';
+
+import type { Entry } from './app/guestbook/entry.model';
 
 const MAX_NAME = 60;
 const MAX_MESSAGE = 500;
@@ -12,11 +9,17 @@ function problem(status: number, message: string): Response {
   return Response.json({ message }, { status });
 }
 
-async function listEntries(env: Env): Promise<Response> {
+async function listEntries(request: Request, env: Env): Promise<Response> {
+  const started = Date.now();
   const { results } = await env.DB.prepare(
     'SELECT id, name, message, created_at FROM entries ORDER BY id DESC LIMIT 50',
   ).all<Entry>();
-  return Response.json(results);
+  return Response.json(results, {
+    headers: {
+      'server-timing': `d1;dur=${Date.now() - started}`,
+      'x-served-via': isInProcessRequest(request) ? 'in-process' : 'network',
+    },
+  });
 }
 
 async function addEntry(request: Request, env: Env): Promise<Response> {
@@ -33,12 +36,12 @@ async function addEntry(request: Request, env: Env): Promise<Response> {
   const cleanName = name.trim();
   const cleanMessage = message.trim();
   if (!cleanName || !cleanMessage) {
-    return problem(422, 'Name and message are required.');
+    return problem(422, 'Add your name and a message.');
   }
   if (cleanName.length > MAX_NAME || cleanMessage.length > MAX_MESSAGE) {
     return problem(
       422,
-      `Keep the name under ${MAX_NAME} and the message under ${MAX_MESSAGE} characters.`,
+      `Keep your name under ${MAX_NAME} characters and the message under ${MAX_MESSAGE}.`,
     );
   }
   const entry = await env.DB.prepare(
@@ -53,7 +56,7 @@ export async function api(request: Request, env: Env): Promise<Response | null> 
   const { pathname } = new URL(request.url);
   if (pathname === '/api/entries') {
     if (request.method === 'GET') {
-      return listEntries(env);
+      return listEntries(request, env);
     }
     if (request.method === 'POST') {
       return addEntry(request, env);
