@@ -21,7 +21,7 @@ Workers bindings, a working hostname allow-list and in-process API calls for Ang
 </table>
 
 > [!NOTE]
-> Version 0.1 is not on npm yet. Function names may still change before it is.
+> Version 0.2.0 is not on npm yet. Function names may still change before it is.
 
 ## Why
 
