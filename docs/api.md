@@ -49,6 +49,7 @@ The Angular-free core that `createCloudflareRequestHandler` wraps. Use it to plu
 | `isHostAllowed(hostname, hosts)` | The matching rule used by the handler. |
 | `stripProxyHeaders(request)` | Returns the request without proxy headers, or the same request if it had none. |
 | `isCloudflareContext(value)` | Whether a `REQUEST_CONTEXT` value came from ngx-cloudflare. |
+| `isInProcessRequest(request)` | Whether `api` received the request through `dispatch` during rendering rather than over the network. The flag lives in memory, so a client cannot fake it with a header. |
 
 ### `CloudflareContext<Env, Cf>`
 
