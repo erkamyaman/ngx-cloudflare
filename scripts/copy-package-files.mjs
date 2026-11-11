@@ -9,3 +9,4 @@ const readme = readFileSync('README.md', 'utf8').replace(
 );
 writeFileSync(`${out}/README.md`, readme);
 copyFileSync('LICENSE', `${out}/LICENSE`);
+copyFileSync('CHANGELOG.md', `${out}/CHANGELOG.md`);

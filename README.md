@@ -16,6 +16,7 @@ Workers bindings, a working hostname allow-list and in-process API calls for Ang
     <td align="center"><a href="docs/api.md"><strong>API</strong></a></td>
     <td align="center"><a href="docs/recipes.md">Recipes</a></td>
     <td align="center"><a href="docs/troubleshooting.md">Troubleshooting</a></td>
+    <td align="center"><a href="CHANGELOG.md">Changelog</a></td>
     <td align="center"><a href="#the-demo">Demo</a></td>
   </tr>
 </table>
