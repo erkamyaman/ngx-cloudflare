@@ -4,9 +4,12 @@ All notable changes to the `ngx-cloudflare` package. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-12
+
 ### Added
 
 - `CHANGELOG.md`, also shipped in the npm package.
+- The ngx-cloudflare logo at the top of the README.
 
 ## [0.2.1] - 2026-11-11
 
@@ -40,6 +43,7 @@ First public release.
   - adds `preview`, `deploy` and `cf-typegen` scripts
 - Support for Angular 19 to 22.
 
-[Unreleased]: https://github.com/erkamyaman/ngx-cloudflare/compare/ad2b5df...HEAD
+[Unreleased]: https://github.com/erkamyaman/ngx-cloudflare/compare/1feab4d...HEAD
+[0.2.2]: https://www.npmjs.com/package/ngx-cloudflare/v/0.2.2
 [0.2.1]: https://www.npmjs.com/package/ngx-cloudflare/v/0.2.1
 [0.2.0]: https://www.npmjs.com/package/ngx-cloudflare/v/0.2.0
