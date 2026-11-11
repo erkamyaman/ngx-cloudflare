@@ -11,7 +11,7 @@
     "deploy": "npm run build && wrangler deploy",
     "cf-typegen": "wrangler types",
     "build:lib": "ng build ngx-cloudflare && tsc -p projects/ngx-cloudflare/tsconfig.schematics.json && node scripts/copy-package-files.mjs",
-    "test:lib": "ng test ngx-cloudflare --watch=false && vitest run --config projects/ngx-cloudflare/vitest.node.config.mts",
+    "test:lib": "vitest run --config projects/ngx-cloudflare/vitest.angular.config.mts && vitest run --config projects/ngx-cloudflare/vitest.node.config.mts",
     "db:migrate": "wrangler d1 migrations apply DB --local",
     "highlight": "node scripts/highlight-code-samples.mjs"
   },
