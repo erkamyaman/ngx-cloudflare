@@ -1,3 +1,4 @@
+<p align="center"><img src="https://raw.githubusercontent.com/erkamyaman/ngx-cloudflare/main/docs/logo/ngx-cloudflare-logo.svg" width="96" height="96" alt="" /></p>
 <h1 align="center">ngx-cloudflare</h1>
 <p align="center">
   <img src="https://img.shields.io/maintenance/yes/2026?style=for-the-badge" alt="Maintained: yes" />
