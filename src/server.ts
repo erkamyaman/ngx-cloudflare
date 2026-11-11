@@ -1,17 +1,6 @@
-import { AngularAppEngine, createRequestHandler } from '@angular/ssr';
+import { createCloudflareRequestHandler } from 'ngx-cloudflare/server';
+import { api } from './api';
 
-const angularApp = new AngularAppEngine({
-	allowedHosts: ['localhost', '127.0.0.1', '*.workers.dev'],
-});
+export const reqHandler = createCloudflareRequestHandler<Env>({ api });
 
-/**
- * This is a request handler used by the Angular CLI (dev-server and during build).
- */
-export const reqHandler = createRequestHandler(async (req) => {
-	const res = await angularApp.handle(req);
-
-	return res ?? new Response('Page not found.', { status: 404 });
-});
-
-
-export default { fetch: reqHandler };
+export default { fetch: reqHandler } satisfies ExportedHandler<Env>;
