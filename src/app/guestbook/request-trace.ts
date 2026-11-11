@@ -1,5 +1,5 @@
-import type { HttpHeaders } from '@angular/common/http';
 import type { CloudflareContext } from 'ngx-cloudflare';
+import type { VisitRecord } from './visit-log';
 import { isHostAllowed, resolveAllowedHosts } from 'ngx-cloudflare/server';
 
 export interface RequestTrace {
@@ -14,24 +14,18 @@ export interface RequestTrace {
   country: string | null;
   protocol: string | null;
   tls: string | null;
-  visitsBefore: number;
-  visit: number;
+  visit: VisitRecord;
   renderedAt: string;
 }
 
-export interface EntriesMeta {
-  servedVia: string | null;
-  d1Ms: number | null;
-}
-
-function text(value: unknown): string | null {
+function nonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value ? value : null;
 }
 
 export function createRequestTrace(
   request: Request,
   cloudflare: CloudflareContext<object>,
-  visitsBefore: number,
+  visit: VisitRecord,
 ): RequestTrace {
   const url = new URL(request.url);
   const matched = resolveAllowedHosts().find((pattern) => isHostAllowed(url.hostname, [pattern]));
@@ -44,17 +38,11 @@ export function createRequestTrace(
     matched: matched ?? url.hostname,
     bindings: Object.keys(cloudflare.env).sort(),
     source: cloudflare.source,
-    colo: text(cf['colo']),
-    country: text(cf['country']),
-    protocol: text(cf['httpProtocol']),
-    tls: text(cf['tlsVersion']),
-    visitsBefore,
-    visit: visitsBefore + 1,
+    colo: nonEmptyString(cf['colo']),
+    country: nonEmptyString(cf['country']),
+    protocol: nonEmptyString(cf['httpProtocol']),
+    tls: nonEmptyString(cf['tlsVersion']),
+    visit,
     renderedAt: new Date().toISOString(),
   };
-}
-
-export function readEntriesMeta(headers: HttpHeaders): EntriesMeta {
-  const match = /d1;dur=([\d.]+)/.exec(headers.get('server-timing') ?? '');
-  return { servedVia: headers.get('x-served-via'), d1Ms: match ? Number(match[1]) : null };
 }
