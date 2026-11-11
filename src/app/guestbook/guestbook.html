@@ -1,0 +1,72 @@
+<main>
+  <header>
+    <h1>Guestbook</h1>
+    <p class="lede">
+      An Angular app rendered on Cloudflare Workers with
+      <a href="https://github.com/erkamyaman/ngx-cloudflare">ngx-cloudflare</a>. Entries live in D1,
+      the visit counter in KV.
+    </p>
+    @if (visit(); as v) {
+      <p class="meta" id="visit">
+        Visit #{{ v.count }}
+        @if (v.country) {
+          from {{ v.country }}
+        }
+        · bindings via {{ v.source }}
+      </p>
+    }
+  </header>
+
+  <form (submit)="submit($event)" novalidate>
+    <label>
+      Name
+      <input [formField]="entryForm.name" autocomplete="name" />
+    </label>
+    @if (entryForm.name().touched() && entryForm.name().invalid()) {
+      <p class="field-error">
+        {{ entryForm.name().errors()[0].message ?? 'Keep it under 60 characters.' }}
+      </p>
+    }
+    <label>
+      Message
+      <textarea [formField]="entryForm.message" rows="3"></textarea>
+    </label>
+    @if (entryForm.message().touched() && entryForm.message().invalid()) {
+      <p class="field-error">
+        {{ entryForm.message().errors()[0].message ?? 'Keep it under 500 characters.' }}
+      </p>
+    }
+    <button type="submit" [disabled]="sending()">
+      {{ sending() ? 'Signing…' : 'Sign the guestbook' }}
+    </button>
+    @if (error(); as message) {
+      <p class="field-error" role="alert">{{ message }}</p>
+    }
+  </form>
+
+  <section aria-label="Entries">
+    @if (entries.error()) {
+      <p class="field-error">Could not load entries.</p>
+    }
+    <ol id="entries">
+      @for (entry of added(); track entry.id) {
+        <li>
+          <strong>{{ entry.name }}</strong>
+          <p>{{ entry.message }}</p>
+          <time [attr.datetime]="entry.created_at">{{ entry.created_at.slice(0, 10) }}</time>
+        </li>
+      }
+      @for (entry of entries.value(); track entry.id) {
+        <li>
+          <strong>{{ entry.name }}</strong>
+          <p>{{ entry.message }}</p>
+          <time [attr.datetime]="entry.created_at">{{ entry.created_at.slice(0, 10) }}</time>
+        </li>
+      } @empty {
+        @if (added().length === 0 && !entries.isLoading()) {
+          <li class="empty">No entries yet. Be the first.</li>
+        }
+      }
+    </ol>
+  </section>
+</main>
