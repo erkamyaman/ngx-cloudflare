@@ -53,4 +53,4 @@ export class __CLASS__ {
 TS
 sed -i.bak "s/__CLASS__/$CLASS/" "$COMPONENT" && rm -f "$COMPONENT.bak"
 rm -f src/app/app.spec.ts src/app/app.component.spec.ts
-grep -q provideHttpClient src/app/app.config.ts || { sed -i '' "s#providers: \[#providers: [provideHttpClient(withFetch()), #" src/app/app.config.ts; printf "import { provideHttpClient, withFetch } from '@angular/common/http';\n%s\n" "$(cat src/app/app.config.ts)" > src/app/app.config.ts; }
+grep -q provideHttpClient src/app/app.config.ts || { sed -i.bak "s#providers: \[#providers: [provideHttpClient(withFetch()), #" src/app/app.config.ts && rm -f src/app/app.config.ts.bak; printf "import { provideHttpClient, withFetch } from '@angular/common/http';\n%s\n" "$(cat src/app/app.config.ts)" > src/app/app.config.ts; }
