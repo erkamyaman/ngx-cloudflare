@@ -26,12 +26,25 @@ import {
   TuiTextfield,
 } from '@taiga-ui/core';
 import { TuiButtonCopy, TuiButtonLoading, TuiTextarea } from '@taiga-ui/kit';
-import { injectCloudflare } from 'ngx-cloudflare';
+import { type CloudflareContext, injectCloudflare } from 'ngx-cloudflare';
 import { firstValueFrom } from 'rxjs';
 import { Theme } from '../theme';
 import { CODE_SAMPLES } from './code-samples.generated';
-import type { Entry } from './entry.model';
-import { createRequestTrace, EntriesMeta, readEntriesMeta, RequestTrace } from './request-trace';
+import { EntriesMeta, readEntriesMeta } from './entries-meta';
+import { ENTRY_LIMITS, type Entry } from './entry.model';
+import { createRequestTrace, RequestTrace } from './request-trace';
+import { recordVisit } from './visit-log';
+
+type SignState =
+  | { kind: 'idle' }
+  | { kind: 'signing' }
+  | { kind: 'signed'; name: string }
+  | { kind: 'failed'; message: string };
+
+type FetchState = 'loading' | 'failed' | 'in-process' | 'network' | 'unlabelled';
+
+type HydrationCheck =
+  { kind: 'pending' } | { kind: 'cache-hit' } | { kind: 'refetched'; count: number };
 
 const TRACE_KEY = makeStateKey<RequestTrace>('trace');
 const ENTRIES_META_KEY = makeStateKey<EntriesMeta>('entries-meta');
@@ -68,10 +81,10 @@ export class Guestbook {
   protected readonly entries = httpResource<Entry[]>(() => '/api/entries', { defaultValue: [] });
   protected readonly trace = signal<RequestTrace | null>(this.state.get(TRACE_KEY, null));
   protected readonly added = signal<Entry[]>([]);
-  protected readonly error = signal('');
-  protected readonly signedAs = signal('');
-  protected readonly browserRequests = signal<number | null>(null);
+  protected readonly signState = signal<SignState>({ kind: 'idle' });
+  protected readonly hydration = signal<HydrationCheck>({ kind: 'pending' });
   protected readonly angularVersion = VERSION.full;
+  protected readonly limits = ENTRY_LIMITS;
   protected readonly samples = CODE_SAMPLES.map((sample) => ({
     ...sample,
     html: this.sanitizer.bypassSecurityTrustHtml(sample.html),
@@ -80,9 +93,13 @@ export class Guestbook {
   protected readonly model = signal({ name: '', message: '' });
   protected readonly entryForm = form(this.model, (path) => {
     required(path.name, { message: 'Add your name.' });
-    maxLength(path.name, 60, { message: 'Keep your name under 60 characters.' });
+    maxLength(path.name, ENTRY_LIMITS.name, {
+      message: `Keep your name under ${ENTRY_LIMITS.name} characters.`,
+    });
     required(path.message, { message: 'Write a message.' });
-    maxLength(path.message, 500, { message: 'Keep the message under 500 characters.' });
+    maxLength(path.message, ENTRY_LIMITS.message, {
+      message: `Keep the message under ${ENTRY_LIMITS.message} characters.`,
+    });
   });
   protected readonly nameInvalid = computed(
     () => this.entryForm.name().touched() && this.entryForm.name().invalid(),
@@ -98,19 +115,55 @@ export class Guestbook {
   private readonly entriesMeta = computed(
     () => this.liveMeta() ?? this.state.get(ENTRIES_META_KEY, null),
   );
-  protected readonly servedVia = computed(() => this.entriesMeta()?.servedVia ?? null);
-  protected readonly fetchedInProcess = computed(() => this.servedVia() === 'in-process');
+  protected readonly fetchState = computed<FetchState>(() => {
+    const status = this.entries.status();
+    if (status === 'error') {
+      return 'failed';
+    }
+    const servedVia = this.entriesMeta()?.servedVia;
+    if (servedVia) {
+      return servedVia;
+    }
+    return status === 'loading' || status === 'reloading' ? 'loading' : 'unlabelled';
+  });
   protected readonly d1Ms = computed(() => this.entriesMeta()?.d1Ms ?? null);
-  protected readonly cacheHit = computed(() => this.browserRequests() === 0);
-  protected readonly refetched = computed(() => (this.browserRequests() ?? 0) > 0);
+  protected readonly signing = computed(() => this.signState().kind === 'signing');
+  protected readonly signedName = computed(() => {
+    const state = this.signState();
+    return state.kind === 'signed' ? state.name : '';
+  });
+  protected readonly signError = computed(() => {
+    const state = this.signState();
+    return state.kind === 'failed' ? state.message : '';
+  });
+  protected readonly refetchCount = computed(() => {
+    const check = this.hydration();
+    return check.kind === 'refetched' ? check.count : 0;
+  });
+  protected readonly visibleEntries = computed(() => {
+    const fresh = this.added();
+    const freshIds = new Set(fresh.map((entry) => entry.id));
+    return [
+      ...fresh.map((entry) => ({ ...entry, fresh: true })),
+      ...(this.entries.hasValue() ? this.entries.value() : [])
+        .filter((entry) => !freshIds.has(entry.id))
+        .map((entry) => ({ ...entry, fresh: false })),
+    ];
+  });
+  protected readonly showEmptyMessage = computed(
+    () => this.visibleEntries().length === 0 && !this.entries.isLoading() && !this.entries.error(),
+  );
+  protected readonly bindingList = computed(() => this.trace()?.bindings.join(' ') ?? '');
   protected readonly themeIcon = computed(() => (this.theme.dark() ? '@tui.sun' : '@tui.moon'));
   protected readonly themeLabel = computed(() =>
     this.theme.dark() ? 'Switch to light mode' : 'Switch to dark mode',
   );
 
   constructor() {
-    if (this.cloudflare && this.request) {
-      this.pendingTasks.run(() => this.traceRequest());
+    const cloudflare = this.cloudflare;
+    const request = this.request;
+    if (cloudflare && request) {
+      this.pendingTasks.run(() => this.traceRequest(cloudflare, request));
       effect(() => this.transferEntriesMeta());
     }
     afterNextRender(() => this.countBrowserFetches());
@@ -118,26 +171,26 @@ export class Guestbook {
 
   protected signGuestbook(event: Event): void {
     event.preventDefault();
-    this.error.set('');
-    this.signedAs.set('');
+    if (this.signing()) {
+      return;
+    }
     void submit(this.entryForm, async () => {
+      this.signState.set({ kind: 'signing' });
       try {
         const entry = await firstValueFrom(this.http.post<Entry>('/api/entries', this.model()));
         this.added.update((list) => [entry, ...list]);
-        this.signedAs.set(entry.name);
         this.model.update((value) => ({ ...value, message: '' }));
         this.entryForm.message().reset();
+        this.signState.set({ kind: 'signed', name: entry.name });
       } catch (err) {
-        this.error.set(this.describeError(err));
+        this.signState.set({ kind: 'failed', message: this.describeError(err) });
       }
     });
   }
 
-  private async traceRequest(): Promise<void> {
-    const { env, ctx } = this.cloudflare!;
-    const visitsBefore = Number((await env.VISITS.get('count')) ?? 0);
-    const trace = createRequestTrace(this.request!, this.cloudflare!, visitsBefore);
-    ctx.waitUntil(env.VISITS.put('count', String(trace.visit)));
+  private async traceRequest(cloudflare: CloudflareContext<Env>, request: Request): Promise<void> {
+    const visit = await recordVisit(cloudflare);
+    const trace = createRequestTrace(request, cloudflare, visit);
     this.state.set(TRACE_KEY, trace);
     this.trace.set(trace);
   }
@@ -153,7 +206,9 @@ export class Guestbook {
     const requests = performance
       .getEntriesByType('resource')
       .filter((entry) => new URL(entry.name).pathname === '/api/entries');
-    this.browserRequests.set(requests.length);
+    this.hydration.set(
+      requests.length === 0 ? { kind: 'cache-hit' } : { kind: 'refetched', count: requests.length },
+    );
   }
 
   private describeError(err: unknown): string {

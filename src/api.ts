@@ -1,11 +1,9 @@
 import { isInProcessRequest } from 'ngx-cloudflare/server';
 
-import type { Entry } from './app/guestbook/entry.model';
+import { SERVED_VIA_HEADER, type ServedVia } from './app/guestbook/entries-meta';
+import { ENTRY_LIMITS, type Entry } from './app/guestbook/entry.model';
 
-const MAX_NAME = 60;
-const MAX_MESSAGE = 500;
-
-function problem(status: number, message: string): Response {
+function jsonError(status: number, message: string): Response {
   return Response.json({ message }, { status });
 }
 
@@ -17,7 +15,9 @@ async function listEntries(request: Request, env: Env): Promise<Response> {
   return Response.json(results, {
     headers: {
       'server-timing': `d1;dur=${Date.now() - started}`,
-      'x-served-via': isInProcessRequest(request) ? 'in-process' : 'network',
+      [SERVED_VIA_HEADER]: (isInProcessRequest(request)
+        ? 'in-process'
+        : 'network') satisfies ServedVia,
     },
   });
 }
@@ -27,21 +27,21 @@ async function addEntry(request: Request, env: Env): Promise<Response> {
   try {
     input = await request.json();
   } catch {
-    return problem(400, 'Send JSON with name and message.');
+    return jsonError(400, 'Send JSON with name and message.');
   }
   const { name, message } = (input ?? {}) as Record<string, unknown>;
   if (typeof name !== 'string' || typeof message !== 'string') {
-    return problem(400, 'Send JSON with name and message.');
+    return jsonError(400, 'Send JSON with name and message.');
   }
   const cleanName = name.trim();
   const cleanMessage = message.trim();
   if (!cleanName || !cleanMessage) {
-    return problem(422, 'Add your name and a message.');
+    return jsonError(422, 'Add your name and a message.');
   }
-  if (cleanName.length > MAX_NAME || cleanMessage.length > MAX_MESSAGE) {
-    return problem(
+  if (cleanName.length > ENTRY_LIMITS.name || cleanMessage.length > ENTRY_LIMITS.message) {
+    return jsonError(
       422,
-      `Keep your name under ${MAX_NAME} characters and the message under ${MAX_MESSAGE}.`,
+      `Keep your name under ${ENTRY_LIMITS.name} characters and the message under ${ENTRY_LIMITS.message}.`,
     );
   }
   const entry = await env.DB.prepare(
@@ -61,7 +61,7 @@ export async function api(request: Request, env: Env): Promise<Response | null> 
     if (request.method === 'POST') {
       return addEntry(request, env);
     }
-    return problem(405, 'Use GET or POST.');
+    return jsonError(405, 'Use GET or POST.');
   }
-  return problem(404, 'Not found.');
+  return jsonError(404, 'Not found.');
 }

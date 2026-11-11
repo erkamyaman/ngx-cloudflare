@@ -52,7 +52,7 @@
         </div>
         <div class="row ok">
           <dt>env</dt>
-          <dd>{{ t.bindings.join(' ') }}</dd>
+          <dd>{{ bindingList() }}</dd>
         </div>
         <div class="row" [class.ok]="t.colo">
           <dt>cf</dt>
@@ -64,27 +64,45 @@
           </dd>
         </div>
         <div class="row ok">
-          <dt>kv</dt>
+          <dt>d1</dt>
           <dd>
-            VISITS.get('count') = {{ t.visitsBefore }}<br /><span class="dim"
-              >put({{ t.visit }}) in ctx.waitUntil()</span
+            visits = {{ t.visit.count }}<br /><span class="dim"
+              >one atomic UPDATE ... RETURNING</span
             >
           </dd>
         </div>
-        <div class="row" [class.ok]="fetchedInProcess()" [class.warn]="!fetchedInProcess()">
+        <div class="row ok">
+          <dt>kv</dt>
+          <dd>
+            last-visit = {{ t.visit.previous ?? 'none' }}<br /><span class="dim"
+              >put("{{ t.visit.current }}") in ctx.waitUntil()</span
+            >
+          </dd>
+        </div>
+        <div
+          class="row"
+          [class.ok]="fetchState() === 'in-process'"
+          [class.warn]="fetchState() !== 'in-process' && fetchState() !== 'loading'"
+        >
           <dt>fetch</dt>
           <dd>
             GET /api/entries
             <br /><span class="dim">
-              @switch (servedVia()) {
+              @switch (fetchState()) {
                 @case ('in-process') {
                   in-process via dispatch(), no subrequest
                 }
                 @case ('network') {
                   left the Worker over the network
                 }
-                @default {
+                @case ('loading') {
+                  loading
+                }
+                @case ('failed') {
                   failed
+                }
+                @case ('unlabelled') {
+                  answered without an x-served-via header
                 }
               }
             </span>
@@ -98,18 +116,22 @@
             </dd>
           </div>
         }
-        <div class="row" [class.ok]="cacheHit()" [class.warn]="refetched()">
+        <div
+          class="row"
+          [class.ok]="hydration().kind === 'cache-hit'"
+          [class.warn]="hydration().kind === 'refetched'"
+        >
           <dt>hydrate</dt>
           <dd aria-live="polite">
-            @switch (browserRequests()) {
-              @case (null) {
+            @switch (hydration().kind) {
+              @case ('pending') {
                 waiting for the browser
               }
-              @case (0) {
+              @case ('cache-hit') {
                 transfer cache hit<br /><span class="dim">0 browser fetches to /api/entries</span>
               }
-              @default {
-                {{ browserRequests() }} browser fetches to /api/entries
+              @case ('refetched') {
+                {{ refetchCount() }} browser fetches to /api/entries
               }
             }
           </dd>
@@ -119,7 +141,7 @@
         @if (t.ray) {
           cf-ray {{ t.ray }}<br />
         }
-        {{ t.renderedAt | date: 'yyyy-MM-dd HH:mm:ss' : 'UTC' }} UTC, visit {{ t.visit }}
+        {{ t.renderedAt | date: 'yyyy-MM-dd HH:mm:ss' : 'UTC' }} UTC, visit {{ t.visit.count }}
       </p>
     } @else {
       <p class="trace-empty">
@@ -150,7 +172,7 @@
         <textarea
           id="message"
           tuiTextarea
-          [limit]="500"
+          [limit]="limits.message"
           [minRows]="3"
           [maxRows]="8"
           [formField]="entryForm.message"
@@ -160,17 +182,19 @@
         ></textarea>
       </tui-textfield>
       <tui-error id="message-error" [formField]="entryForm.message" />
-      <button tuiButton type="submit" class="submit" [loading]="entryForm().submitting()">
+      <button tuiButton type="submit" class="submit" [loading]="signing()">
         Sign the guestbook
       </button>
-      @if (error(); as message) {
-        <div tuiNotification appearance="negative" role="alert">{{ message }}</div>
-      }
       <div aria-live="polite">
-        @if (signedAs(); as name) {
-          <div tuiNotification appearance="positive">
-            Signed, {{ name }}. Your entry is at the top of the list.
-          </div>
+        @switch (signState().kind) {
+          @case ('signed') {
+            <div tuiNotification appearance="positive">
+              Signed, {{ signedName() }}. Your entry is at the top of the list.
+            </div>
+          }
+          @case ('failed') {
+            <div tuiNotification appearance="negative" role="alert">{{ signError() }}</div>
+          }
         }
       </div>
     </form>
@@ -184,15 +208,8 @@
       </div>
     }
     <ol id="entries">
-      @for (entry of added(); track entry.id) {
-        <li class="fresh">
-          <strong>{{ entry.name }}</strong>
-          <p>{{ entry.message }}</p>
-          <time [attr.datetime]="entry.created_at">{{ entry.created_at | date: 'd MMM y' }}</time>
-        </li>
-      }
-      @for (entry of entries.value(); track entry.id) {
-        <li>
+      @for (entry of visibleEntries(); track entry.id) {
+        <li [class.fresh]="entry.fresh">
           <strong>{{ entry.name }}</strong>
           <p>{{ entry.message }}</p>
           <time [attr.datetime]="entry.created_at">{{ entry.created_at | date: 'd MMM y' }}</time>
@@ -200,7 +217,7 @@
       } @empty {
         @if (entries.isLoading()) {
           <li class="empty">Loading entries</li>
-        } @else if (added().length === 0 && !entries.error()) {
+        } @else if (showEmptyMessage()) {
           <li class="empty">Nobody has signed yet. Be the first.</li>
         }
       }

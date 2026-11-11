@@ -21,10 +21,10 @@ export class Theme {
   }
 
   toggle(): void {
-    this.set(this.dark() ? 'light' : 'dark');
+    this.remember(this.dark() ? 'light' : 'dark');
   }
 
-  set(theme: ThemeName): void {
+  remember(theme: ThemeName): void {
     this.dark.set(theme === 'dark');
     if (this.browser) {
       this.document.cookie = `${COOKIE}=${theme}; path=/; max-age=${ONE_YEAR}; samesite=lax`;

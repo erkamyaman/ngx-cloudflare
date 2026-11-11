@@ -4,3 +4,5 @@ export interface Entry {
   message: string;
   created_at: string;
 }
+
+export const ENTRY_LIMITS = { name: 60, message: 500 } as const;

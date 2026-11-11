@@ -16,7 +16,7 @@ export const appConfig: ApplicationConfig = {
       provide: TUI_DARK_MODE,
       useFactory: () => {
         const theme = inject(Theme);
-        return Object.assign(theme.dark, { reset: () => theme.set('dark') });
+        return Object.assign(theme.dark, { reset: () => theme.remember('dark') });
       },
     },
     provideClientHydration(
