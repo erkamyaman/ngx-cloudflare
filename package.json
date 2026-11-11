@@ -16,7 +16,7 @@
     "highlight": "node scripts/highlight-code-samples.mjs"
   },
   "private": true,
-  "packageManager": "npm@10.9.9",
+  "packageManager": "npm@10.9.10",
   "dependencies": {
     "@angular/cdk": "~22.2.0",
     "@angular/common": "^22.2.0",
