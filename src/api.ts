@@ -23,6 +23,12 @@ async function listEntries(request: Request, env: Env): Promise<Response> {
 }
 
 async function addEntry(request: Request, env: Env): Promise<Response> {
+  const { success } = await env.SIGN_LIMITER.limit({
+    key: request.headers.get('cf-connecting-ip') ?? 'unknown',
+  });
+  if (!success) {
+    return jsonError(429, 'Too many signatures. Wait a minute and try again.');
+  }
   let input: unknown;
   try {
     input = await request.json();
