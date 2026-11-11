@@ -1,0 +1,93 @@
+:root {
+  color-scheme: light;
+  --bg: #fafaf9;
+  --text: #1c1917;
+  --muted: #57534e;
+  --accent: #c2410c;
+  --accent-deep: #9a3412;
+  --on-accent: #ffffff;
+  --rule: #e7e5e4;
+  --rule-strong: #d6d3d1;
+  --field: #ffffff;
+  --term-bg: #1c1917;
+  --term-text: #e7e5e4;
+  --term-dim: #a8a29e;
+  --term-rule: #3a3330;
+  --term-accent: #fb923c;
+  --term-ok: #4ade80;
+  --term-warn: #facc15;
+  --shadow: rgba(28, 25, 23, 0.32);
+  --highlight: #ffedd5;
+  --focus: #1c1917;
+  --danger: #b91c1c;
+}
+
+:root[data-theme='dark'] {
+  & {
+    color-scheme: dark;
+    --bg: #161210;
+    --text: #f5f5f4;
+    --muted: #a8a29e;
+    --accent: #fb923c;
+    --accent-deep: #fdba74;
+    --on-accent: #1c1206;
+    --rule: #2c2522;
+    --rule-strong: #44403c;
+    --field: #211c19;
+    --term-bg: #0d0b0a;
+    --term-text: #e7e5e4;
+    --term-dim: #a8a29e;
+    --term-rule: #2c2522;
+    --term-accent: #fb923c;
+    --term-ok: #4ade80;
+    --term-warn: #facc15;
+    --shadow: rgba(0, 0, 0, 0.7);
+    --highlight: #4a2a12;
+    --focus: #fafaf9;
+    --danger: #fca5a5;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+  font-optical-sizing: auto;
+  font-size: 1rem;
+  line-height: 1.55;
+  scrollbar-color: var(--rule-strong) var(--bg);
+}
+
+::selection {
+  background: var(--highlight);
+  color: var(--text);
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 0.15em;
+}
+
+input,
+textarea {
+  caret-color: var(--accent);
+}
+
+@import (reference) '@taiga-ui/styles/mixins/theme/palette.less';
+
+:root[data-theme='dark'] {
+  .tui-theme-dark();
+}
+
+:root,
+[tuiTheme] {
+  --tui-background-base: var(--field);
+  --tui-background-accent-1: var(--accent);
+  --tui-background-accent-1-hover: var(--accent-deep);
+  --tui-background-accent-1-pressed: var(--accent-deep);
+  --tui-text-primary-on-accent-1: var(--on-accent);
+  --tui-text-action: var(--accent);
+  --tui-text-action-hover: var(--accent-deep);
+  --tui-border-focus: var(--accent);
+}
