@@ -35,9 +35,8 @@ jobs:
           name: package
           path: dist-lib/ngx-cloudflare-*.tgz
 
-  e2e:
-    name: ng add on Angular ${{ matrix.angular }}
-    needs: test
+  lib-angular:
+    name: Library tests on Angular ${{ matrix.angular }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -48,8 +47,29 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - run: scripts/test-lib-angular.sh ${{ matrix.angular }}
+
+  e2e:
+    name: ng add on ${{ matrix.kind }}, Angular ${{ matrix.angular }}
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        angular: ['19', '20', '21', '22']
+        kind: ['ng-new']
+        include:
+          - angular: '22'
+            kind: cloudflare
+          - angular: '22'
+            kind: wrangler-setup
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - uses: actions/download-artifact@v4
         with:
           name: package
           path: package
-      - run: scripts/e2e-ng-add.sh ${{ matrix.angular }} package/ngx-cloudflare-*.tgz
+      - run: scripts/e2e-ng-add.sh ${{ matrix.angular }} package/ngx-cloudflare-*.tgz ${{ matrix.kind }}
