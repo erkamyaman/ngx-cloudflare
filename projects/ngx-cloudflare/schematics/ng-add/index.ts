@@ -15,8 +15,10 @@ import {
 } from '@schematics/angular/utility';
 import { applyEdits, modify, parse } from 'jsonc-parser';
 import { posix } from 'node:path';
+import { addProvider } from './add-provider';
 import { classifyServerEntry, renderServerEntry, SERVER_ENTRY_INSTRUCTIONS } from './server-entry';
 import {
+  addAllowedHostsVar,
   createWranglerConfig,
   hostsFromConfig,
   parseWranglerConfig,
@@ -33,7 +35,7 @@ export interface NgAddOptions {
 
 type Json = Record<string, unknown>;
 
-interface Plan {
+interface SetupPlan {
   projectName: string;
   root: string;
   sourceRoot: string;
@@ -109,14 +111,14 @@ function resolveOutput(
   return { base, output: { main: join(base, server, 'server.mjs'), assets: join(base, browser) } };
 }
 
-async function plan(tree: Tree, options: NgAddOptions): Promise<Plan> {
+async function createSetupPlan(tree: Tree, options: NgAddOptions): Promise<SetupPlan> {
   const workspace = await readWorkspace(tree);
   const applications = [...workspace.projects].filter(
-    ([, p]) => p.extensions['projectType'] === 'application',
+    ([, project]) => project.extensions['projectType'] === 'application',
   );
   const name =
     options.project ??
-    applications.find(([, p]) => p.targets.get('build')?.options?.['ssr'])?.[0] ??
+    applications.find(([, project]) => project.targets.get('build')?.options?.['ssr'])?.[0] ??
     applications[0]?.[0];
   const project = name ? workspace.projects.get(name) : undefined;
   if (!name || !project) {
@@ -156,17 +158,17 @@ async function plan(tree: Tree, options: NgAddOptions): Promise<Plan> {
   };
 }
 
-function updateAngularJson(p: Plan): Rule {
+function updateAngularJson(setup: SetupPlan): Rule {
   return updateWorkspace((workspace) => {
-    const build = workspace.projects.get(p.projectName)!.targets.get('build')!;
+    const build = workspace.projects.get(setup.projectName)!.targets.get('build')!;
     const options = (build.options ??= {}) as Json;
     const ssr =
       typeof options['ssr'] === 'object' && options['ssr'] !== null
         ? { ...(options['ssr'] as Json) }
         : {};
-    ssr['entry'] ??= p.serverEntry;
-    const platformKey = p.angularMajor >= 22 ? 'platform' : 'experimentalPlatform';
-    delete ssr[p.angularMajor >= 22 ? 'experimentalPlatform' : 'platform'];
+    ssr['entry'] ??= setup.serverEntry;
+    const platformKey = setup.angularMajor >= 22 ? 'platform' : 'experimentalPlatform';
+    delete ssr[setup.angularMajor >= 22 ? 'experimentalPlatform' : 'platform'];
     ssr[platformKey] = 'neutral';
     options['ssr'] = ssr;
     options['outputMode'] = 'server';
@@ -186,25 +188,25 @@ function wranglerConfigPath(tree: Tree): string | null {
   );
 }
 
-function updateWranglerConfig(p: Plan, options: NgAddOptions): Rule {
+function updateWranglerConfig(setup: SetupPlan, options: NgAddOptions): Rule {
   return (tree, context) => {
     const path = wranglerConfigPath(tree);
     if (!path) {
       const date = options.compatibilityDate ?? new Date().toISOString().slice(0, 10);
       tree.create(
         'wrangler.jsonc',
-        createWranglerConfig(workerName(p.projectName), p.output, date),
+        createWranglerConfig(workerName(setup.projectName), setup.output, date),
       );
-      context.logger.info(`Created wrangler.jsonc for Worker "${workerName(p.projectName)}".`);
+      context.logger.info(`Created wrangler.jsonc for Worker "${workerName(setup.projectName)}".`);
       return;
     }
     if (path.endsWith('.toml')) {
       context.logger.warn(
-        `wrangler.toml is not edited automatically. Set main = "${p.output.main}" and [assets] directory = "${p.output.assets}", binding = "ASSETS".`,
+        `wrangler.toml is not edited automatically. Set main = "${setup.output.main}" and [assets] directory = "${setup.output.assets}", binding = "ASSETS".`,
       );
       return;
     }
-    const { text, changes } = repairWranglerConfig(tree.readText(path), p.output);
+    const { text, changes } = repairWranglerConfig(tree.readText(path), setup.output);
     if (changes.length) {
       tree.overwrite(path, text);
       context.logger.info(`Updated ${path}:\n  - ${changes.join('\n  - ')}`);
@@ -220,30 +222,40 @@ function routeHosts(tree: Tree): string[] {
   return hostsFromConfig(parseWranglerConfig(tree.readText(path)));
 }
 
-function updateServerEntry(p: Plan): Rule {
+function updateServerEntry(setup: SetupPlan): Rule {
   return (tree, context) => {
-    const current = readText(tree, p.serverEntry);
+    const current = readText(tree, setup.serverEntry);
     const info = classifyServerEntry(current);
-    const hosts = [...new Set([...info.keptHosts, ...routeHosts(tree)])].filter(
+    const customHosts = [...new Set([...info.keptHosts, ...routeHosts(tree)])].filter(
       (host) => !['localhost', '127.0.0.1', '*.workers.dev'].includes(host),
     );
+    const configPath = wranglerConfigPath(tree);
+    const hostsInConfig = configPath !== null && !configPath.endsWith('.toml');
+    if (hostsInConfig && customHosts.length) {
+      const { text, added } = addAllowedHostsVar(tree.readText(configPath), customHosts);
+      if (added.length) {
+        tree.overwrite(configPath, text);
+        context.logger.info(`Added ${added.join(', ')} to ALLOWED_HOSTS in ${configPath}.`);
+      }
+    }
+    const hosts = hostsInConfig ? [] : customHosts;
     switch (info.kind) {
       case 'ours':
-        context.logger.info(`${p.serverEntry} already uses ngx-cloudflare. Left unchanged.`);
+        context.logger.info(`${setup.serverEntry} already uses ngx-cloudflare. Left unchanged.`);
         return;
       case 'custom':
         context.logger.warn(
-          `${p.serverEntry} has custom code, so ngx-cloudflare did not change it. Move your routes into the api option and use:\n\n${SERVER_ENTRY_INSTRUCTIONS}\n`,
+          `${setup.serverEntry} has custom code, so ngx-cloudflare did not change it. Move your routes into the api option and use:\n\n${SERVER_ENTRY_INSTRUCTIONS}\n`,
         );
         return;
       default:
         if (current === null) {
-          tree.create(p.serverEntry, renderServerEntry(hosts));
+          tree.create(setup.serverEntry, renderServerEntry(hosts));
         } else {
-          tree.overwrite(p.serverEntry, renderServerEntry(hosts));
+          tree.overwrite(setup.serverEntry, renderServerEntry(hosts));
         }
         context.logger.info(
-          `${current === null ? 'Created' : 'Replaced'} ${p.serverEntry} (${info.kind === 'angular-node' ? 'stock Node server' : info.kind === 'cloudflare-template' ? "Cloudflare's template" : 'new'}).`,
+          `${current === null ? 'Created' : 'Replaced'} ${setup.serverEntry} (${info.kind === 'angular-node' ? 'stock Node server' : info.kind === 'cloudflare-template' ? "Cloudflare's template" : 'new'}).`,
         );
         if (info.kind === 'angular-node') {
           editJson(tree, 'package.json', (text, set) => {
@@ -257,13 +269,13 @@ function updateServerEntry(p: Plan): Rule {
   };
 }
 
-function findServerConfig(tree: Tree, p: Plan): string | null {
-  const conventional = posix.join(p.sourceRoot, 'app/app.config.server.ts');
+function findServerConfig(tree: Tree, setup: SetupPlan): string | null {
+  const conventional = posix.join(setup.sourceRoot, 'app/app.config.server.ts');
   if (tree.exists(conventional)) {
     return conventional;
   }
   let found: string | null = null;
-  tree.getDir(p.sourceRoot).visit((path) => {
+  tree.getDir(setup.sourceRoot).visit((path) => {
     if (
       !found &&
       path.endsWith('.ts') &&
@@ -276,60 +288,12 @@ function findServerConfig(tree: Tree, p: Plan): string | null {
   return found;
 }
 
-function closingBracket(text: string, open: number): number {
-  let depth = 0;
-  let quote: string | null = null;
-  for (let i = open; i < text.length; i++) {
-    const char = text[i];
-    if (quote) {
-      if (char === '\\') i++;
-      else if (char === quote) quote = null;
-      continue;
-    }
-    if (char === "'" || char === '"' || char === '`') quote = char;
-    else if (char === '[' || char === '(' || char === '{') depth++;
-    else if (char === ']' || char === ')' || char === '}') {
-      depth--;
-      if (depth === 0) return i;
-    }
-  }
-  return -1;
-}
-
-function addProvider(text: string, expression: string, importLines: string[]): string | null {
-  const call = text.indexOf('provideServerRendering(');
-  const providers = text.lastIndexOf('providers', call);
-  const open = providers === -1 ? -1 : text.indexOf('[', providers);
-  const close = open === -1 ? -1 : closingBracket(text, open);
-  if (call === -1 || close === -1 || close < call) {
-    return null;
-  }
-  const inner = text.slice(open + 1, close);
-  const before = text.slice(0, close).replace(/[\s,]*$/, '');
-  const tail = text.slice(before.length, close);
-  let insertion = `, ${expression}`;
-  if (inner.includes('\n')) {
-    const indent = /\n([ \t]*)\S/.exec(inner)?.[1] ?? '  ';
-    const closingIndent = /\n([ \t]*)$/.exec(tail)?.[1] ?? '';
-    insertion = `,\n${indent}${expression},\n${closingIndent}`;
-  }
-  let result = before + insertion + text.slice(close);
-  const imports = [...result.matchAll(/^import[\s\S]*?from\s+['"][^'"]+['"];?[ \t]*$/gm)];
-  const last = imports.at(-1);
-  const insertAt = last ? last.index! + last[0].length : 0;
-  const missing = importLines.filter((line) => !result.includes(line));
-  if (missing.length) {
-    result = `${result.slice(0, insertAt)}\n${missing.join('\n')}${result.slice(insertAt)}`;
-  }
-  return result;
-}
-
 const MANUAL_PROVIDER =
   'Add provideCloudflare() from ngx-cloudflare to the providers of your server application config.';
 
-function updateServerConfig(p: Plan): Rule {
+function updateServerConfig(setup: SetupPlan): Rule {
   return (tree, context) => {
-    const path = findServerConfig(tree, p);
+    const path = findServerConfig(tree, setup);
     if (!path) {
       context.logger.warn(`Could not find the server application config. ${MANUAL_PROVIDER}`);
       return;
@@ -352,9 +316,9 @@ function updateServerConfig(p: Plan): Rule {
 
 const SERVER_ROUTING_CALLS = ['withRoutes(', 'provideServerRouting(', 'provideServerRoutesConfig('];
 
-function addServerRouting(p: Plan): Rule {
+function addServerRouting(setup: SetupPlan): Rule {
   return (tree, context) => {
-    const path = findServerConfig(tree, p);
+    const path = findServerConfig(tree, setup);
     if (!path) {
       return;
     }
@@ -365,7 +329,7 @@ function addServerRouting(p: Plan): Rule {
     const routesPath = posix.join(posix.dirname(path), 'app.routes.server.ts');
     const routesImport = `./${posix.basename(routesPath, '.ts')}`;
     const manual = `${path} has no server routes, which AngularAppEngine needs. Add a ${routesPath} with RenderMode.Server routes and register them, see https://angular.dev/guide/ssr#configure-server-side-rendering`;
-    if (p.angularMajor !== 19) {
+    if (setup.angularMajor !== 19) {
       context.logger.warn(manual);
       return;
     }
@@ -396,9 +360,9 @@ function addServerRouting(p: Plan): Rule {
 const STOCK_SERVER_ROUTES =
   /^import\{RenderMode,ServerRoute\}from'@angular\/ssr';exportconstserverRoutes:ServerRoute\[\]=\[\{path:'\*\*',renderMode:RenderMode\.Prerender,?\},?\];?$/;
 
-function updateServerRoutes(p: Plan): Rule {
+function updateServerRoutes(setup: SetupPlan): Rule {
   return (tree, context) => {
-    const path = posix.join(p.sourceRoot, 'app/app.routes.server.ts');
+    const path = posix.join(setup.sourceRoot, 'app/app.routes.server.ts');
     const text = readText(tree, path);
     if (text === null || !STOCK_SERVER_ROUTES.test(text.replace(/\s+/g, '').replace(/"/g, "'"))) {
       return;
@@ -410,7 +374,7 @@ function updateServerRoutes(p: Plan): Rule {
   };
 }
 
-function updatePackageScripts(p: Plan): Rule {
+function updatePackageScripts(setup: SetupPlan): Rule {
   return (tree) => {
     editJson(tree, 'package.json', (text, set) => {
       const pkg = parse(text) as { scripts?: Record<string, string> };
@@ -434,9 +398,9 @@ function updatePackageScripts(p: Plan): Rule {
   };
 }
 
-function updateTsConfigs(p: Plan): Rule {
+function updateTsConfigs(setup: SetupPlan): Rule {
   return (tree) => {
-    for (const tsConfig of p.tsConfigs) {
+    for (const tsConfig of setup.tsConfigs) {
       if (tree.exists(tsConfig)) {
         addTypesFile(tree, tsConfig);
       }
@@ -482,7 +446,7 @@ function updateGitignore(): Rule {
   };
 }
 
-function nextSteps(p: Plan): Rule {
+function nextSteps(setup: SetupPlan): Rule {
   return (_tree, context) => {
     context.logger.info(
       [
@@ -493,7 +457,7 @@ function nextSteps(p: Plan): Rule {
         '  npm run preview      build, then run it in the local Workers runtime',
         '  npm run deploy       build, then wrangler deploy',
         '',
-        `Custom domains go in allowedHosts in ${p.serverEntry}. Routes rendered at build time (RenderMode.Prerender) have no bindings.`,
+        `Custom domains go in ALLOWED_HOSTS in the vars of wrangler.jsonc. Routes rendered at build time (RenderMode.Prerender) have no bindings.`,
       ].join('\n'),
     );
   };
@@ -501,23 +465,23 @@ function nextSteps(p: Plan): Rule {
 
 export function ngAdd(options: NgAddOptions = {}): Rule {
   return async (tree: Tree, _context: SchematicContext) => {
-    const p = await plan(tree, options);
+    const setup = await createSetupPlan(tree, options);
     return chain([
-      updateAngularJson(p),
-      updateWranglerConfig(p, options),
-      updateServerEntry(p),
-      addServerRouting(p),
-      updateServerConfig(p),
-      updateServerRoutes(p),
-      updatePackageScripts(p),
-      updateTsConfigs(p),
+      updateAngularJson(setup),
+      updateWranglerConfig(setup, options),
+      updateServerEntry(setup),
+      addServerRouting(setup),
+      updateServerConfig(setup),
+      updateServerRoutes(setup),
+      updatePackageScripts(setup),
+      updateTsConfigs(setup),
       updateGitignore(),
       addDependency('wrangler', '^4.0.0', {
         type: DependencyType.Dev,
         existing: ExistingBehavior.Skip,
         install: options.skipInstall ? InstallBehavior.None : InstallBehavior.Auto,
       }),
-      nextSteps(p),
+      nextSteps(setup),
     ]);
   };
 }

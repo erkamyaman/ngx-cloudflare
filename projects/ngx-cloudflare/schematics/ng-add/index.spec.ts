@@ -244,7 +244,8 @@ describe('ng add ngx-cloudflare', () => {
 
     tree = await add(tree);
 
-    expect(tree.readText('src/server.ts')).toContain("allowedHosts: ['shop.example.com']");
+    expect(tree.readText('src/server.ts')).toContain('createCloudflareRequestHandler()');
+    expect(json(tree, 'wrangler.jsonc').vars.ALLOWED_HOSTS).toBe('shop.example.com');
     expect(tree.readText('wrangler.jsonc')).toContain('// keep me');
     expect(json(tree, 'wrangler.jsonc').main).toBe('./dist/server/server.mjs');
   });
@@ -311,7 +312,7 @@ describe('ng add ngx-cloudflare', () => {
     expect(tree.readText('wrangler.jsonc')).toContain("// from wrangler's autoconfig");
   });
 
-  it('adds hostnames from wrangler routes to the allow-list', async () => {
+  it('adds hostnames from wrangler routes to ALLOWED_HOSTS, again on a later run', async () => {
     tree = await workspace();
     tree.create(
       'wrangler.jsonc',
@@ -328,8 +329,17 @@ describe('ng add ngx-cloudflare', () => {
       }),
     );
     tree = await add(tree);
-    expect(tree.readText('src/server.ts')).toContain(
-      "allowedHosts: ['shop.example.com', 'example.com', '*.example.org', 'staging.example.com']",
+    expect(json(tree, 'wrangler.jsonc').vars.ALLOWED_HOSTS).toBe(
+      'shop.example.com,example.com,*.example.org,staging.example.com',
+    );
+    expect(tree.readText('src/server.ts')).toContain('createCloudflareRequestHandler()');
+
+    const config = json(tree, 'wrangler.jsonc');
+    config.routes.push('new.example.com/*');
+    tree.overwrite('wrangler.jsonc', JSON.stringify(config));
+    tree = await add(tree);
+    expect(json(tree, 'wrangler.jsonc').vars.ALLOWED_HOSTS).toBe(
+      'shop.example.com,example.com,*.example.org,staging.example.com,new.example.com',
     );
   });
 

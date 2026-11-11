@@ -131,3 +131,24 @@ export function repairWranglerConfig(text: string, output: WorkerOutput): Repair
   }
   return { text: result, changes };
 }
+
+export interface AllowedHostsResult {
+  text: string;
+  added: string[];
+}
+
+export function addAllowedHostsVar(text: string, hosts: readonly string[]): AllowedHostsResult {
+  const config = parseWranglerConfig(text) as WranglerConfig & { vars?: Record<string, unknown> };
+  const current = config.vars?.['ALLOWED_HOSTS'];
+  const existing = typeof current === 'string' ? current.split(/[\s,]+/).filter(Boolean) : [];
+  const added = hosts.filter((host) => !existing.includes(host));
+  if (!added.length) {
+    return { text, added };
+  }
+  const formatting = { formattingOptions: { insertSpaces: !text.includes('\n\t'), tabSize: 2 } };
+  const value = [...existing, ...added].join(',');
+  return {
+    text: applyEdits(text, modify(text, ['vars', 'ALLOWED_HOSTS'], value, formatting)),
+    added,
+  };
+}
