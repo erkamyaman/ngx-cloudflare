@@ -1,10 +1,12 @@
 #!/bin/bash
-# Usage: scripts/e2e-ng-add.sh <angular-cli-version> <path-to-ngx-cloudflare.tgz>
-# Creates a fresh `ng new --ssr` app, runs `ng add` from the tarball, adds user code,
-# then checks `wrangler dev` and `ng serve`. Exits non-zero on the first failed check.
+# Usage: scripts/e2e-ng-add.sh <angular-cli-version> <path-to-ngx-cloudflare.tgz> [ng-new|cloudflare|wrangler-setup]
+# Creates an app (plain `ng new --ssr`, Cloudflare's starter, or `ng new` set up by `wrangler setup`),
+# runs `ng add` from the tarball, adds user code, then checks `wrangler dev` and `ng serve`.
+# Exits non-zero on the first failed check.
 set -euo pipefail
 
 NG_VERSION=$1
+KIND=${3:-ng-new}
 TARBALL=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")
 SCRIPTS=$(cd "$(dirname "$0")" && pwd)
 WORK=$(mktemp -d)
@@ -40,8 +42,25 @@ wait_for() {
 }
 
 cd "$WORK"
-CI=true npx -y "@angular/cli@$NG_VERSION" new app --ssr --style css --skip-git --defaults >/dev/null
+case "$KIND" in
+  ng-new)
+    CI=true npx -y "@angular/cli@$NG_VERSION" new app --ssr --style css --skip-git --defaults >/dev/null
+    ;;
+  cloudflare)
+    CI=true npx -y create-cloudflare@latest app --framework=angular --platform=workers \
+      --no-deploy --no-git --no-open >/dev/null
+    ;;
+  wrangler-setup)
+    CI=true npx -y "@angular/cli@$NG_VERSION" new app --ssr --style css --skip-git --defaults >/dev/null
+    (cd app && node -e 'const p=require("./package.json");p.name="app-web";require("fs").writeFileSync("package.json",JSON.stringify(p,null,2))' \
+      && npx -y wrangler@4 setup --yes </dev/null >/dev/null)
+    ;;
+  *)
+    fail "unknown project kind: $KIND"
+    ;;
+esac
 cd app
+echo "ok   created a $KIND project"
 npx ng add "$TARBALL" --skip-confirmation
 "$SCRIPTS/e2e-user-code.sh" "$WORK/app"
 
@@ -72,4 +91,4 @@ B="http://localhost:$SERVE_PORT"
 expect "ng serve: api reads env and KV" "$(curl -s --noproxy '*' "$B/api/greeting")" '"greeting":"hello from env"'
 expect "ng serve: component reads env" "$(curl -s --noproxy '*' "$B/")" 'env=hello from env source=platform-proxy'
 
-echo "All checks passed for Angular $NG_VERSION."
+echo "All checks passed for $KIND on Angular $NG_VERSION."
