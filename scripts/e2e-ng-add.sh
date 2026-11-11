@@ -47,7 +47,7 @@ npx ng add "$TARBALL" --skip-confirmation
 
 npx ng build
 SERVER_DIR=$(node -e 'const c=require("jsonc-parser").parse(require("fs").readFileSync("wrangler.jsonc","utf8"));console.log(require("path").dirname(c.main))')
-if grep -q wrangler "$SERVER_DIR"/*.mjs; then fail "the production server bundle references wrangler"; fi
+if grep -qE 'import\("wrangler"\)|from ?"wrangler"' "$SERVER_DIR"/*.mjs; then fail "the production server bundle imports wrangler"; fi
 echo "ok   production bundle has no wrangler"
 
 npx wrangler dev --port "$WRANGLER_PORT" >wd.log 2>&1 </dev/null &

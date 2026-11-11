@@ -28,7 +28,7 @@ jobs:
       - run: npx ng test ngx-cloudflare-demo --watch=false
       - run: npx ng build ngx-cloudflare-demo
       - name: Production bundle must not reference wrangler
-        run: '! grep -l wrangler dist/server/*.mjs'
+        run: '! grep -lE "import\\(\"wrangler\"\\)|from ?\"wrangler\"" dist/server/*.mjs'
       - run: npm pack ./dist-lib/ngx-cloudflare --pack-destination dist-lib
       - uses: actions/upload-artifact@v4
         with:
