@@ -1,6 +1,6 @@
 import { assertInInjectionContext, inject, REQUEST_CONTEXT } from '@angular/core';
 import {
-  CLOUDFLARE_CONTEXT_MARKER,
+  isCloudflareContext,
   type CloudflareContext,
   type CloudflareExecutionContext,
   type CloudflareRequestCf,
@@ -18,11 +18,7 @@ const MISSING_CONTEXT =
 function readContext(fn: Function): CloudflareContext<any, any> | null {
   assertInInjectionContext(fn);
   const value = inject(REQUEST_CONTEXT, { optional: true });
-  return typeof value === 'object' &&
-    value !== null &&
-    (value as Record<symbol, unknown>)[CLOUDFLARE_CONTEXT_MARKER] === true
-    ? (value as CloudflareContext<any, any>)
-    : null;
+  return isCloudflareContext(value) ? value : null;
 }
 
 function orThrow<T>(value: T | null, options: InjectCloudflareOptions | undefined): T | null {

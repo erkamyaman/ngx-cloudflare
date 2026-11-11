@@ -8,10 +8,16 @@ import {
   HttpResponse,
 } from '@angular/common/http';
 import { inject, Injectable, REQUEST, REQUEST_CONTEXT } from '@angular/core';
-import { Observable } from 'rxjs';
-import { CLOUDFLARE_CONTEXT_MARKER, type CloudflareContext } from 'ngx-cloudflare/server';
+import { Observable, type Subscription } from 'rxjs';
+import { isCloudflareContext } from 'ngx-cloudflare/server';
 
 const XSSI_PREFIX = /^\)\]\}',?\n/;
+
+type DispatchPhase =
+  | { kind: 'dispatching' }
+  | { kind: 'fallback'; subscription: Subscription }
+  | { kind: 'done' }
+  | { kind: 'cancelled' };
 
 function toHeaders(headers: Headers): HttpHeaders {
   let result = new HttpHeaders();
@@ -78,12 +84,8 @@ export class CloudflareFetchBackend extends FetchBackend {
   private readonly incoming = inject(REQUEST, { optional: true });
 
   override handle(req: HttpRequest<unknown>): Observable<HttpEvent<unknown>> {
-    const context = this.cloudflare as CloudflareContext<any, any> | null;
-    if (
-      !this.incoming ||
-      !context ||
-      (context as unknown as Record<symbol, unknown>)[CLOUDFLARE_CONTEXT_MARKER] !== true
-    ) {
+    const context = this.cloudflare;
+    if (!this.incoming || !isCloudflareContext(context)) {
       return super.handle(req);
     }
     const base = new URL(this.incoming.url);
@@ -94,27 +96,35 @@ export class CloudflareFetchBackend extends FetchBackend {
 
     return new Observable<HttpEvent<unknown>>((observer) => {
       const aborter = new AbortController();
-      let fallback: { unsubscribe(): void } | undefined;
-      let finished = false;
+      let phase: DispatchPhase = { kind: 'dispatching' };
+
+      const settle = (next: DispatchPhase): boolean => {
+        if (phase.kind !== 'dispatching') {
+          return false;
+        }
+        phase = next;
+        return true;
+      };
 
       (async () => {
         const response = await context.dispatch(toRequest(req, url, aborter.signal));
-        if (aborter.signal.aborted) {
+        if (phase.kind !== 'dispatching') {
           return;
         }
         if (!response) {
-          fallback = super.handle(req).subscribe(observer);
+          const subscription = super.handle(req).subscribe(observer);
+          if (!settle({ kind: 'fallback', subscription })) {
+            subscription.unsubscribe();
+          }
           return;
         }
         observer.next({ type: HttpEventType.Sent });
         const headers = toHeaders(response.headers);
         const { body, parseError } = await readBody(req, response);
-        if (aborter.signal.aborted) {
+        if (!settle({ kind: 'done' })) {
           return;
         }
-        const ok = response.status >= 200 && response.status < 300;
-        finished = true;
-        if (ok && !parseError) {
+        if (response.status >= 200 && response.status < 300 && !parseError) {
           observer.next(
             new HttpResponse({
               body,
@@ -137,8 +147,7 @@ export class CloudflareFetchBackend extends FetchBackend {
           );
         }
       })().catch((error: unknown) => {
-        if (!aborter.signal.aborted) {
-          finished = true;
+        if (settle({ kind: 'done' })) {
           observer.error(
             new HttpErrorResponse({ error, status: 0, statusText: 'Unknown Error', url: url.href }),
           );
@@ -146,8 +155,9 @@ export class CloudflareFetchBackend extends FetchBackend {
       });
 
       return () => {
-        fallback?.unsubscribe();
-        if (!finished) {
+        if (phase.kind === 'fallback') {
+          phase.subscription.unsubscribe();
+        } else if (settle({ kind: 'cancelled' })) {
           aborter.abort();
         }
       };

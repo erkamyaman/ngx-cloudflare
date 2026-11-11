@@ -180,6 +180,61 @@ describe('CloudflareFetchBackend', () => {
     expect(signal?.aborted).toBe(true);
   });
 
+  it('cancels the network request when unsubscribed after falling back', async () => {
+    let networkSignal: AbortSignal | undefined;
+    vi.stubGlobal('fetch', (_input: RequestInfo | URL, init?: RequestInit) => {
+      networkSignal = init?.signal ?? undefined;
+      return new Promise(() => {});
+    });
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(withFetch()),
+        provideCloudflare(),
+        { provide: REQUEST, useValue: new Request('https://demo.x.workers.dev/') },
+        {
+          provide: REQUEST_CONTEXT,
+          useValue: {
+            env: {},
+            ctx: {},
+            cf: undefined,
+            source: 'workers',
+            dispatch: async () => null,
+            [CLOUDFLARE_CONTEXT_MARKER]: true,
+          },
+        },
+      ],
+    });
+    const subscription = TestBed.inject(HttpClient).get('/api/x').subscribe();
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(networkSignal?.aborted).toBe(false);
+    subscription.unsubscribe();
+    expect(networkSignal?.aborted).toBe(true);
+  });
+
+  it('does not emit after being unsubscribed while reading the body', async () => {
+    let release!: () => void;
+    const { http } = setup(
+      async () =>
+        new Response(
+          new ReadableStream({
+            start: (c) =>
+              (release = () => {
+                c.enqueue(new TextEncoder().encode('{}'));
+                c.close();
+              }),
+          }),
+        ),
+    );
+    const next = vi.fn();
+    const subscription = http.get('/api/slow').subscribe({ next, error: next });
+    await new Promise((resolve) => setTimeout(resolve));
+    subscription.unsubscribe();
+    release();
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it('returns response headers', async () => {
     const { http } = setup(async () => Response.json({}, { headers: { 'x-total': '5' } }));
     const response = await firstValueFrom(http.get('/api/x', { observe: 'response' }));
