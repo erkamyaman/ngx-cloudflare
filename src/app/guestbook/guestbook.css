@@ -28,6 +28,18 @@
   gap: 1rem;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.18em;
+}
+
+.logo {
+  width: 0.82em;
+  height: 0.82em;
+  flex: none;
+}
+
 .sign {
   grid-area: sign;
   margin-top: 3rem;

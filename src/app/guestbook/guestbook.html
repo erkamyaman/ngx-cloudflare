@@ -1,7 +1,7 @@
 <main class="page">
   <header class="intro">
     <div class="title-row">
-      <h1>Guestbook</h1>
+      <h1 class="brand"><img class="logo" src="favicon.svg" alt="" />Guestbook</h1>
       <button
         tuiIconButton
         type="button"
@@ -14,8 +14,8 @@
       </button>
     </div>
     <p>
-      Angular {{ angularVersion }} with server-side rendering on Cloudflare Workers. Entries live in
-      D1, the visit counter in KV, and every response carries a trace from
+      Angular {{ angularVersion }} with server-side rendering on Cloudflare Workers. Entries and the
+      visit counter live in D1, the last visit in KV, and every response carries a trace from
       <a tuiLink href="https://github.com/erkamyaman/ngx-cloudflare">ngx-cloudflare</a>. Open
       DevTools after it loads: the browser never requests <code>/api/entries</code>.
     </p>
