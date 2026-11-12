@@ -30,7 +30,7 @@ jobs:
       - name: Production bundle must not reference wrangler
         run: '! grep -lE "import\\(\"wrangler\"\\)|from ?\"wrangler\"" dist/server/*.mjs'
       - run: npm pack ./dist-lib/ngx-cloudflare --pack-destination dist-lib
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: package
           path: dist-lib/ngx-cloudflare-*.tgz
@@ -68,7 +68,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: package
           path: package
