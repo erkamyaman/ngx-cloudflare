@@ -1,9 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createCloudflareFetch,
   hostsFromEnv,
-  isCloudflareContext,
+  ɵisCloudflareContext,
   isHostAllowed,
+  isCacheablePageResponse,
   isInProcessRequest,
   resolveAllowedHosts,
   stripProxyHeaders,
@@ -110,7 +111,7 @@ describe('createCloudflareFetch', () => {
 
     expect(await response.text()).toBe('page');
     const context = calls[0].context!;
-    expect(isCloudflareContext(context)).toBe(true);
+    expect(ɵisCloudflareContext(context)).toBe(true);
     expect(context.env).toBe(env);
     expect(context.ctx).toBe(ctx);
     expect(context.cf).toEqual({ country: 'TR' });
@@ -326,5 +327,110 @@ describe('createCloudflareFetch', () => {
         await calls[0].context!.dispatch(new Request('https://d.workers.dev/api/x')),
       ).toBeNull();
     });
+  });
+});
+
+describe('isCacheablePageResponse', () => {
+  it.each([
+    ['public, s-maxage=60', 200, true],
+    ['max-age=300', 200, true],
+    ['public, max-age=0', 200, false],
+    ['private, max-age=60', 200, false],
+    ['no-store', 200, false],
+    ['no-cache, s-maxage=60', 200, false],
+    [null, 200, false],
+    ['public, s-maxage=60', 404, false],
+  ])('cache-control %s with status %i is %s', (cacheControl, status, expected) => {
+    const headers = cacheControl ? { 'cache-control': cacheControl } : undefined;
+    expect(isCacheablePageResponse(new Response('x', { status, headers }))).toBe(expected);
+  });
+
+  it('never caches a response that sets a cookie', () => {
+    const response = new Response('x', {
+      headers: { 'cache-control': 'public, s-maxage=60', 'set-cookie': 'a=1' },
+    });
+    expect(isCacheablePageResponse(response)).toBe(false);
+  });
+});
+
+describe('cachePages', () => {
+  const store = new Map<string, Response>();
+  const cache = {
+    match: vi.fn(async (request: Request) => store.get(request.url)?.clone()),
+    put: vi.fn(
+      async (request: Request, response: Response) => void store.set(request.url, response),
+    ),
+  };
+  const waits: Promise<unknown>[] = [];
+  const workerCtx = {
+    waitUntil: (p: Promise<unknown>) => void waits.push(p),
+    passThroughOnException() {},
+  };
+
+  function setup(cacheControl = 'public, s-maxage=60') {
+    store.clear();
+    cache.match.mockClear();
+    cache.put.mockClear();
+    vi.stubGlobal('caches', { default: cache });
+    let renders = 0;
+    const handler = createCloudflareFetch(
+      async () => {
+        renders++;
+        return new Response(`page ${renders}`, { headers: { 'cache-control': cacheControl } });
+      },
+      { cachePages: true },
+    );
+    return { handler, renders: () => renders };
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('stores a cacheable page and serves the next request from the cache', async () => {
+    const { handler, renders } = setup();
+    const first = await handler(new Request('https://a.workers.dev/about'), {}, workerCtx);
+    await Promise.all(waits);
+    const second = await handler(new Request('https://a.workers.dev/about'), {}, workerCtx);
+    expect(await first.text()).toBe('page 1');
+    expect(await second.text()).toBe('page 1');
+    expect(renders()).toBe(1);
+  });
+
+  it('skips the cache for requests with cookies or authorization', async () => {
+    const { handler, renders } = setup();
+    for (const header of ['cookie', 'authorization']) {
+      await handler(
+        new Request('https://a.workers.dev/', { headers: { [header]: 'x' } }),
+        {},
+        workerCtx,
+      );
+    }
+    expect(cache.match).not.toHaveBeenCalled();
+    expect(cache.put).not.toHaveBeenCalled();
+    expect(renders()).toBe(2);
+  });
+
+  it('does not store pages without a shared max-age', async () => {
+    const { handler } = setup('no-store');
+    await handler(new Request('https://a.workers.dev/'), {}, workerCtx);
+    expect(cache.put).not.toHaveBeenCalled();
+  });
+
+  it('leaves the cache alone under ng serve and when the option is off', async () => {
+    setup();
+    const devHandler = createCloudflareFetch(
+      async () => new Response('dev'),
+      { cachePages: true },
+      async () => ({
+        env: {},
+        ctx: workerCtx,
+        cf: undefined,
+      }),
+    );
+    await devHandler(new Request('http://localhost/'));
+    const offHandler = createCloudflareFetch(async () => new Response('off'));
+    await offHandler(new Request('https://a.workers.dev/'), {}, workerCtx);
+    expect(cache.match).not.toHaveBeenCalled();
   });
 });

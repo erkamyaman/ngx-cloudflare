@@ -26,6 +26,7 @@ Other handlers (`scheduled`, `queue`, `email`) stay yours: export them next to `
 | `allowedHosts` | `[]` | Hostnames to accept on top of `localhost`, `127.0.0.1` and `*.workers.dev`, and on top of the `ALLOWED_HOSTS` var. `*.example.com` matches subdomains, not `example.com` itself. `'*'` accepts every host and must be added on purpose. |
 | `api` | none | A function `(request, env, ctx) => Response \| null`, or an object with a `fetch` method such as a Hono app. Return `null` or `undefined` to let Angular render the path. |
 | `apiPrefix` | `'/api/'` | Which paths go to `api`. `false` sends every path to `api` first. |
+| `cachePages` | `false` | Keep rendered pages in the Workers Cache API when their `Cache-Control` allows it. See [Caching pages](recipes.md#caching-pages). |
 | `stripProxyHeaders` | `true` | Remove `forwarded` and `x-forwarded-*` before Angular sees the request. The `api` handler still gets them. |
 | `devPlatform` | `{}` | Options for `getPlatformProxy()` under `ng serve`: `configPath`, `environment`, `persist`. `false` turns dev bindings off. |
 
@@ -35,7 +36,8 @@ Requests are handled in this order:
 
 1. The host is checked. A refused host gets HTTP 400 naming the option to change, and one log line per host.
 2. Paths under `apiPrefix` go to `api`.
-3. Everything else is rendered by Angular, with the Cloudflare context as `REQUEST_CONTEXT`. No page means HTTP 404.
+3. With `cachePages`, a `GET` without cookies or `Authorization` is answered from the cache when it has the page.
+4. Everything else is rendered by Angular, with the Cloudflare context as `REQUEST_CONTEXT`. No page means HTTP 404.
 
 Static files never reach the handler: Workers serves them from the `assets` directory first.
 
@@ -49,11 +51,10 @@ The Angular-free core that `createCloudflareRequestHandler` wraps. Use it to plu
 | --- | --- |
 | `resolveAllowedHosts(extra)` | The final allow-list: defaults plus `extra`, lower-cased and de-duplicated. |
 | `isHostAllowed(hostname, hosts)` | The matching rule used by the handler. |
+| `isCacheablePageRequest(request)` | Whether `cachePages` may answer a request from the cache: a `GET` without `Cookie` or `Authorization`. |
+| `isCacheablePageResponse(response)` | Whether `cachePages` would store a rendered page: status 200, no `Set-Cookie`, and a `max-age` or `s-maxage` above 0 without `private`, `no-store` or `no-cache`. |
 | `stripProxyHeaders(request)` | Returns the request without proxy headers, or the same request if it had none. |
-| `isCloudflareContext(value)` | Whether a `REQUEST_CONTEXT` value came from ngx-cloudflare. |
 | `hostsFromEnv(env)` | The hostnames listed in `env.ALLOWED_HOSTS`. |
-| `toApiHandler(api)` | Turns an `api` option (a function or an object with `fetch`) into one function. |
-| `callInProcess(handler, request, env, ctx)` | Calls an `api` handler the way `dispatch` does, marking the request as in-process. |
 | `isInProcessRequest(request)` | Whether `api` received the request through `dispatch` during rendering rather than over the network. The flag lives in memory, so a client cannot fake it with a header. |
 
 ### `CloudflareContext<Env, Cf>`
@@ -94,9 +95,9 @@ if (env) {
 
 ### `provideCloudflare(options?)`
 
-Add it to the server application config, after `provideServerRendering()`. It installs `CloudflareFetchBackend`, which answers `HttpClient` calls to the page's own origin through `context.dispatch` instead of the network. Other origins, and requests nothing handled in-process, still go over the network. Because it sits where Angular's backend sits, the transfer cache records the responses and the browser does not request them again.
+Add it to the server application config, after `provideServerRendering()`. It installs an `HttpClient` backend that answers `HttpClient` calls to the page's own origin through `context.dispatch` instead of the network. Other origins, and requests nothing handled in-process, still go over the network. Because it sits where Angular's backend sits, the transfer cache records the responses and the browser does not request them again.
 
-`CloudflareFetchBackend` extends Angular's `FetchBackend`, so Angular's NG02801 warning stays quiet.
+The backend extends Angular's `FetchBackend`, so Angular's NG02801 warning stays quiet.
 
 | Option | Default | What it does |
 | --- | --- | --- |
@@ -123,4 +124,8 @@ TestBed.configureTestingModule({
 | --- | --- |
 | `provideCloudflareTesting(options)` | Provides `REQUEST_CONTEXT` and `REQUEST` with fake bindings. Add `provideCloudflare()` too to test in-process `HttpClient` calls through `api`. |
 | `createCloudflareTestContext(options)` | The same context without TestBed. |
-| `createTestExecutionContext()` | A `ctx` that records `waitUntil` promises in `waitUntilPromises`. |
+| `createCloudflareTestExecutionContext()` | A `ctx` that records `waitUntil` promises in `waitUntilPromises`. |
+
+## Private exports
+
+Names starting with `ɵ` (`ɵCloudflareFetchBackend`, `ɵisCloudflareContext`, `ɵtoApiHandler`, `ɵcallInProcess`, `ɵCLOUDFLARE_CONTEXT_MARKER`) are shared between the package's own entry points. They are exported only for that reason, as in Angular itself, and may change in any release.

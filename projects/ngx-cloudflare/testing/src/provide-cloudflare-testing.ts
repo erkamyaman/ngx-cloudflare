@@ -6,13 +6,13 @@ import {
 } from '@angular/core';
 import {
   ApiOption,
-  callInProcess,
-  CLOUDFLARE_CONTEXT_MARKER,
+  ɵcallInProcess,
+  ɵCLOUDFLARE_CONTEXT_MARKER,
   type CloudflareContext,
   type CloudflareContextSource,
   type CloudflareExecutionContext,
   type CloudflareRequestCf,
-  toApiHandler,
+  ɵtoApiHandler,
 } from 'ngx-cloudflare/server';
 
 export interface CloudflareTestingOptions<Env = Cloudflare.Env, Cf = CloudflareRequestCf> {
@@ -28,7 +28,7 @@ export interface TestExecutionContext extends CloudflareExecutionContext {
   readonly waitUntilPromises: Promise<unknown>[];
 }
 
-export function createTestExecutionContext(
+export function createCloudflareTestExecutionContext(
   overrides: Partial<CloudflareExecutionContext> = {},
 ): TestExecutionContext {
   const waitUntilPromises: Promise<unknown>[] = [];
@@ -46,15 +46,15 @@ export function createCloudflareTestContext<Env = Cloudflare.Env, Cf = Cloudflar
   options: CloudflareTestingOptions<Env, Cf> = {},
 ): CloudflareContext<Env, Cf> {
   const env = (options.env ?? {}) as Env;
-  const ctx = createTestExecutionContext(options.ctx);
-  const handler = toApiHandler(options.api);
+  const ctx = createCloudflareTestExecutionContext(options.ctx);
+  const handler = ɵtoApiHandler(options.api);
   return {
     env,
     ctx,
     cf: options.cf,
     source: options.source ?? 'workers',
-    dispatch: async (request) => (handler ? callInProcess(handler, request, env, ctx) : null),
-    [CLOUDFLARE_CONTEXT_MARKER]: true,
+    dispatch: async (request) => (handler ? ɵcallInProcess(handler, request, env, ctx) : null),
+    [ɵCLOUDFLARE_CONTEXT_MARKER]: true,
   };
 }
 

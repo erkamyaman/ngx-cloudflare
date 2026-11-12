@@ -4,6 +4,21 @@ All notable changes to the `ngx-cloudflare` package. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Added
+
+- `cachePages` option: stores rendered pages in the Workers Cache API when their `Cache-Control` has a shared max-age, skipping requests with cookies or `Authorization`.
+- `isCacheablePageRequest(request)` and `isCacheablePageResponse(response)` helpers.
+
+### Changed
+
+- Internal exports now start with `ɵ` and may change in any release: `ɵCloudflareFetchBackend`, `ɵisCloudflareContext`, `ɵtoApiHandler`, `ɵcallInProcess`, `ɵCLOUDFLARE_CONTEXT_MARKER`.
+- `createTestExecutionContext` is renamed to `createCloudflareTestExecutionContext`, to match `createCloudflareTestContext`.
+- Durable Objects recipe: a second layout keeps the class in its own Worker, bound by `script_name`, so the binding also works in `ng serve`.
+
+### Removed
+
+- Exports nothing used: `hostRefusal`, `isProxyHeader`, `DEFAULT_ALLOWED_HOSTS`, `DEFAULT_API_PREFIX`, `ALLOWED_HOSTS_VAR`.
+
 ## [0.2.2] - 2026-11-12
 
 ### Added

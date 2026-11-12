@@ -1,6 +1,6 @@
 import { Injector, REQUEST_CONTEXT, runInInjectionContext } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { CLOUDFLARE_CONTEXT_MARKER } from 'ngx-cloudflare/server';
+import { ɵCLOUDFLARE_CONTEXT_MARKER } from 'ngx-cloudflare/server';
 import {
   injectCloudflare,
   injectEnv,
@@ -15,7 +15,7 @@ const context = {
   cf: { country: 'TR' },
   source: 'workers',
   dispatch: async () => null,
-  [CLOUDFLARE_CONTEXT_MARKER]: true,
+  [ɵCLOUDFLARE_CONTEXT_MARKER]: true,
 };
 
 function run<T>(fn: () => T, value?: unknown): T {

@@ -152,9 +152,10 @@ These ship with the package too, for cases the core flow does not cover:
 
 - `ngx-cloudflare/testing`: fake bindings for TestBed.
 - `isInProcessRequest(request)`: lets an `api` handler tell a render-time call from a browser call.
+- `cachePages: true`: keeps pages with a shared `Cache-Control` max-age in the Workers cache. See [Caching pages](docs/recipes.md#caching-pages).
 - `dispatch` falls back to the `ASSETS` binding, so a page can read its own static JSON files in-process.
 - Options to turn parts off: `apiPrefix: false`, `stripProxyHeaders: false`, `devPlatform: false`, `provideCloudflare({ inProcessRequests: false })`.
-- A [Durable Objects recipe](docs/recipes.md#durable-objects).
+- A [Durable Objects recipe](docs/recipes.md#durable-objects), including a layout that works in `ng serve`.
 
 ## Limits
 
@@ -166,7 +167,6 @@ These ship with the package too, for cases the core flow does not cover:
 
 | Next | Why |
 | --- | --- |
-| Durable Objects in `ng serve` | The recipe works in `wrangler dev` and on Workers, but the platform proxy cannot run an internal Durable Object. |
 | Workers beside an existing Node server | A separate build configuration, so adopting this does not replace a working deployment. |
 | Bindings during prerendering | Build-time rendering has no request to carry them. |
 | Typed helpers for queues and cron | `scheduled` and `queue` exports already work next to `fetch`; helpers would add types. |

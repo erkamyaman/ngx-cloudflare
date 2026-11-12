@@ -1,6 +1,6 @@
 export * from './lib/inject-cloudflare';
 export * from './lib/provide-cloudflare';
-export { CloudflareFetchBackend } from './lib/cloudflare-fetch-backend';
+export { ɵCloudflareFetchBackend } from './lib/cloudflare-fetch-backend';
 export type {
   CloudflareContext,
   CloudflareContextSource,

@@ -4,13 +4,13 @@ declare global {
   }
 }
 
-export const CLOUDFLARE_CONTEXT_MARKER: unique symbol = Symbol.for(
+export const ɵCLOUDFLARE_CONTEXT_MARKER: unique symbol = Symbol.for(
   'ngx-cloudflare.context',
 ) as never;
 
-export const DEFAULT_ALLOWED_HOSTS: readonly string[] = ['localhost', '127.0.0.1', '*.workers.dev'];
+const DEFAULT_ALLOWED_HOSTS: readonly string[] = ['localhost', '127.0.0.1', '*.workers.dev'];
 
-export const DEFAULT_API_PREFIX = '/api/';
+const DEFAULT_API_PREFIX = '/api/';
 
 const MAX_LOGGED_REFUSALS = 100;
 
@@ -35,7 +35,7 @@ export interface CloudflareContext<
 > extends CloudflarePlatform<Env, Cf> {
   readonly source: CloudflareContextSource;
   readonly dispatch: (request: Request) => Promise<Response | null>;
-  readonly [CLOUDFLARE_CONTEXT_MARKER]: true;
+  readonly [ɵCLOUDFLARE_CONTEXT_MARKER]: true;
 }
 
 export type ApiResult = Response | null | undefined;
@@ -53,6 +53,7 @@ export interface CloudflareHandlerOptions<Env = Cloudflare.Env> {
   api?: ApiOption<Env>;
   apiPrefix?: string | false;
   stripProxyHeaders?: boolean;
+  cachePages?: boolean;
 }
 
 export type RenderFunction = (
@@ -74,15 +75,15 @@ export function isInProcessRequest(request: Request): boolean {
   return inProcessRequests.has(request);
 }
 
-export function isCloudflareContext(value: unknown): value is CloudflareContext<any, any> {
+export function ɵisCloudflareContext(value: unknown): value is CloudflareContext<any, any> {
   return (
     typeof value === 'object' &&
     value !== null &&
-    (value as Record<symbol, unknown>)[CLOUDFLARE_CONTEXT_MARKER] === true
+    (value as Record<symbol, unknown>)[ɵCLOUDFLARE_CONTEXT_MARKER] === true
   );
 }
 
-export const ALLOWED_HOSTS_VAR = 'ALLOWED_HOSTS';
+const ALLOWED_HOSTS_VAR = 'ALLOWED_HOSTS';
 
 export function hostsFromEnv(env: unknown): string[] {
   const value = (env as Record<string, unknown> | undefined)?.[ALLOWED_HOSTS_VAR];
@@ -124,7 +125,7 @@ export function isHostAllowed(hostname: string, allowedHosts: readonly string[])
   return false;
 }
 
-export function hostRefusal(hostname: string): Response {
+function hostRefusal(hostname: string): Response {
   return new Response(
     `Host "${hostname}" is not allowed by ngx-cloudflare. ` +
       `Add it to ALLOWED_HOSTS in the vars of wrangler.jsonc, or to allowedHosts in src/server.ts. ` +
@@ -133,7 +134,7 @@ export function hostRefusal(hostname: string): Response {
   );
 }
 
-export function isProxyHeader(name: string): boolean {
+function isProxyHeader(name: string): boolean {
   const lower = name.toLowerCase();
   return lower === 'forwarded' || lower.startsWith('x-forwarded-');
 }
@@ -155,7 +156,35 @@ export function stripProxyHeaders(request: Request): Request {
   return new Request(request, { headers });
 }
 
-export function toApiHandler<Env>(api: ApiOption<Env> | undefined): ApiHandler<Env> | undefined {
+export interface PageCache {
+  match(request: Request): Promise<Response | undefined>;
+  put(request: Request, response: Response): Promise<void>;
+}
+
+function defaultPageCache(): PageCache | undefined {
+  return (globalThis as { caches?: { default?: PageCache } }).caches?.default;
+}
+
+export function isCacheablePageRequest(request: Request): boolean {
+  return (
+    request.method === 'GET' &&
+    !request.headers.has('authorization') &&
+    !request.headers.has('cookie')
+  );
+}
+
+export function isCacheablePageResponse(response: Response): boolean {
+  if (response.status !== 200 || response.headers.has('set-cookie')) {
+    return false;
+  }
+  const cacheControl = response.headers.get('cache-control')?.toLowerCase() ?? '';
+  if (/(?:^|,)\s*(?:private|no-store|no-cache)\b/.test(cacheControl)) {
+    return false;
+  }
+  return /(?:^|,)\s*(?:s-maxage|max-age)\s*=\s*0*[1-9]/.test(cacheControl);
+}
+
+export function ɵtoApiHandler<Env>(api: ApiOption<Env> | undefined): ApiHandler<Env> | undefined {
   if (!api) {
     return undefined;
   }
@@ -174,7 +203,7 @@ function matchesPrefix(request: Request, prefix: string | false): boolean {
   return pathname === bare || pathname.startsWith(bare + '/');
 }
 
-export async function callInProcess<Env>(
+export async function ɵcallInProcess<Env>(
   handler: ApiHandler<Env>,
   request: Request,
   env: Env,
@@ -207,9 +236,10 @@ export function createCloudflareFetch<Env = Cloudflare.Env>(
     }
     return hosts;
   };
-  const api = toApiHandler(options.api);
+  const api = ɵtoApiHandler(options.api);
   const apiPrefix = options.apiPrefix ?? DEFAULT_API_PREFIX;
   const strip = options.stripProxyHeaders ?? true;
+  const cachePages = options.cachePages ?? false;
   const loggedRefusals = new Set<string>();
 
   async function callApi(
@@ -254,7 +284,7 @@ export function createCloudflareFetch<Env = Cloudflare.Env>(
         inProcessRequests.add(request);
         return (await callApi(request, platform)) ?? (await serveAsset(request, platform));
       },
-      [CLOUDFLARE_CONTEXT_MARKER]: true,
+      [ɵCLOUDFLARE_CONTEXT_MARKER]: true,
     };
   }
 
@@ -292,8 +322,30 @@ export function createCloudflareFetch<Env = Cloudflare.Env>(
       return apiResponse;
     }
 
+    const pageCache =
+      cachePages && platform && source === 'workers' && isCacheablePageRequest(request)
+        ? defaultPageCache()
+        : undefined;
+    const cacheKey = pageCache ? new Request(request.url) : undefined;
+    if (pageCache && cacheKey) {
+      const cached = await pageCache.match(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    }
+
     const context = platform ? createContext(platform, source) : undefined;
     const response = await render(strip ? stripProxyHeaders(request) : request, context);
-    return response ?? new Response('Page not found.', { status: 404 });
+    if (!response) {
+      return new Response('Page not found.', { status: 404 });
+    }
+    if (pageCache && cacheKey && platform && isCacheablePageResponse(response)) {
+      platform.ctx.waitUntil(
+        pageCache.put(cacheKey, response.clone()).catch((error: unknown) => {
+          console.error(`ngx-cloudflare: could not cache ${request.url}`, error);
+        }),
+      );
+    }
+    return response;
   };
 }

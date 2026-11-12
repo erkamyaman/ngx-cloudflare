@@ -9,7 +9,7 @@ import {
 } from '@angular/common/http';
 import { inject, Injectable, REQUEST, REQUEST_CONTEXT } from '@angular/core';
 import { Observable, type Subscription } from 'rxjs';
-import { isCloudflareContext } from 'ngx-cloudflare/server';
+import { ɵisCloudflareContext } from 'ngx-cloudflare/server';
 
 const XSSI_PREFIX = /^\)\]\}',?\n/;
 
@@ -79,13 +79,13 @@ async function readBody(
 }
 
 @Injectable()
-export class CloudflareFetchBackend extends FetchBackend {
+export class ɵCloudflareFetchBackend extends FetchBackend {
   private readonly cloudflare = inject(REQUEST_CONTEXT, { optional: true });
   private readonly incoming = inject(REQUEST, { optional: true });
 
   override handle(req: HttpRequest<unknown>): Observable<HttpEvent<unknown>> {
     const context = this.cloudflare;
-    if (!this.incoming || !isCloudflareContext(context)) {
+    if (!this.incoming || !ɵisCloudflareContext(context)) {
       return super.handle(req);
     }
     const base = new URL(this.incoming.url);

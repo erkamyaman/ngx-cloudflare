@@ -9,8 +9,8 @@ import {
 import { REQUEST, REQUEST_CONTEXT } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
-import { CLOUDFLARE_CONTEXT_MARKER } from 'ngx-cloudflare/server';
-import { CloudflareFetchBackend } from './cloudflare-fetch-backend';
+import { ɵCLOUDFLARE_CONTEXT_MARKER } from 'ngx-cloudflare/server';
+import { ɵCloudflareFetchBackend } from './cloudflare-fetch-backend';
 import { provideCloudflare } from './provide-cloudflare';
 
 type Dispatch = (request: Request) => Promise<Response | null>;
@@ -36,7 +36,7 @@ function setup(dispatch: Dispatch | null, url = 'https://demo.x.workers.dev/page
               cf: undefined,
               source: 'workers',
               dispatch,
-              [CLOUDFLARE_CONTEXT_MARKER]: true,
+              [ɵCLOUDFLARE_CONTEXT_MARKER]: true,
             },
           }
         : [],
@@ -47,11 +47,11 @@ function setup(dispatch: Dispatch | null, url = 'https://demo.x.workers.dev/page
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe('CloudflareFetchBackend', () => {
+describe('ɵCloudflareFetchBackend', () => {
   it('replaces both HttpBackend and FetchBackend and is a FetchBackend', () => {
     setup(null);
     const backend = TestBed.inject(HttpBackend);
-    expect(backend).toBeInstanceOf(CloudflareFetchBackend);
+    expect(backend).toBeInstanceOf(ɵCloudflareFetchBackend);
     expect(backend).toBeInstanceOf(FetchBackend);
     expect(TestBed.inject(FetchBackend)).toBe(backend);
   });
@@ -200,7 +200,7 @@ describe('CloudflareFetchBackend', () => {
             cf: undefined,
             source: 'workers',
             dispatch: async () => null,
-            [CLOUDFLARE_CONTEXT_MARKER]: true,
+            [ɵCLOUDFLARE_CONTEXT_MARKER]: true,
           },
         },
       ],
@@ -246,6 +246,6 @@ describe('CloudflareFetchBackend', () => {
     TestBed.configureTestingModule({
       providers: [provideHttpClient(withFetch()), provideCloudflare({ inProcessRequests: false })],
     });
-    expect(TestBed.inject(HttpBackend)).not.toBeInstanceOf(CloudflareFetchBackend);
+    expect(TestBed.inject(HttpBackend)).not.toBeInstanceOf(ɵCloudflareFetchBackend);
   });
 });
