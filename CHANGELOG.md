@@ -4,6 +4,8 @@ All notable changes to the `ngx-cloudflare` package. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-13
+
 ### Added
 
 - `cachePages` option: stores rendered pages in the Workers Cache API when their `Cache-Control` has a shared max-age, skipping requests with cookies or `Authorization`.
@@ -58,7 +60,8 @@ First public release.
   - adds `preview`, `deploy` and `cf-typegen` scripts
 - Support for Angular 19 to 22.
 
-[Unreleased]: https://github.com/erkamyaman/ngx-cloudflare/compare/1feab4d...HEAD
+[Unreleased]: https://github.com/erkamyaman/ngx-cloudflare/compare/4721f62...HEAD
+[0.3.0]: https://www.npmjs.com/package/ngx-cloudflare/v/0.3.0
 [0.2.2]: https://www.npmjs.com/package/ngx-cloudflare/v/0.2.2
 [0.2.1]: https://www.npmjs.com/package/ngx-cloudflare/v/0.2.1
 [0.2.0]: https://www.npmjs.com/package/ngx-cloudflare/v/0.2.0
