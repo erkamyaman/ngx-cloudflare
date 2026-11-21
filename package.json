@@ -50,7 +50,7 @@
     "ng-packagr": "~22.2.0",
     "prettier": "^3.8.1",
     "shiki": "^3.23.0",
-    "typescript": "~6.0.2",
+    "typescript": "~7.0.0",
     "vitest": "^5.0.0",
     "wrangler": "^4.160.0",
     "xhr2": "^0.2.1"
