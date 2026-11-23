@@ -47,7 +47,7 @@
     "@angular/compiler-cli": "^22.2.0",
     "@types/node": "^24.19.2",
     "jsdom": "^31.0.0",
-    "ng-packagr": "~22.2.0",
+    "ng-packagr": "~22.3.0",
     "prettier": "^3.8.1",
     "shiki": "^4.0.0",
     "typescript": "~6.0.2",
